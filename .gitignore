@@ -137,3 +137,29 @@ _site
 .sass-cache
 .jekyll-cache
 .jekyll-metadata
+
+# Jekyll Artifacts
+_site
+.sass-cache
+.jekyll-cache
+.jekyll-metadata
+
+# OCR / Tesseract Artifacts
+*.traineddata
+!eng.traineddata # Keep if we commit the main one, but usually we download it
+*.!*!*.traineddata # Temp download files
+
+# Database / SQLite
+:memory:
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
