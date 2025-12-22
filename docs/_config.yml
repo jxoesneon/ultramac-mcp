@@ -1,0 +1,31 @@
+title: UltraMac MCP
+description: The premier Model Context Protocol server for macOS desktop automation.
+remote_theme: just-the-docs/just-the-docs
+
+# Branding
+logo: /assets/logo.png # We will need to ensure this exists or use text
+favicon_ico: /assets/favicon.ico
+
+# Navigation
+search_enabled: true
+aux_links:
+  "GitHub Repository": "https://github.com/jxoesneon/ultramac-mcp"
+  "Co-fi": "https://ko-fi.com/jxoesneon"
+
+# Color Scheme settings (Just the Docs specific)
+color_scheme: dark
+
+# Footer
+footer_content: "© 2025 UltraMac MCP Authors. Maintained by jxoesneon."
+
+# Callouts
+callouts:
+  warning:
+    title: Warning
+    color: red
+  important:
+    title: Important
+    color: blue
+  note:
+    title: Note
+    color: purple

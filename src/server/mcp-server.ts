@@ -1,0 +1,113 @@
+/**
+ * UltraMac MCP
+ * (c) 2025 UltraMac MCP Authors
+ * This source code is licensed under the ISC license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import { FastMCP } from "fastmcp";
+import * as Sentry from "@sentry/node";
+import { auditLogger, logToolInvocation, logError } from '../core/audit-logger';
+import { handleToolError, sanitizeErrorForClient } from '../core/errors';
+import { recordToolInvocation, recordError } from '../core/metrics';
+import { authMiddleware } from '../core/auth';
+import { registerHealthEndpoints } from '../core/health';
+
+/**
+ * Enterprise MCPServer class wrapping FastMCP with enterprise features
+ */
+export class MCPServer {
+    private server: FastMCP<any>;
+    private toolRegistry: Map<string, any> = new Map();
+    private name: string;
+    private version: string;
+
+    constructor(name: string = "UltraMac MCP", version: string = "1.0.0") {
+        this.name = name;
+        this.version = version;
+        
+        const disableAuth = process.env.ULTRAMAC_MCP_DISABLE_AUTH === 'true';
+        const useStdio = process.argv.slice(2).includes("--stdio");
+
+        this.server = new FastMCP({
+            name: this.name,
+            version: this.version as `${number}.${number}.${number}`,
+            authenticate: (useStdio || disableAuth) ? undefined : async (req: any) => {
+                return authMiddleware(req) ? {} : undefined;
+            }
+        });
+
+        // Register health endpoints
+        registerHealthEndpoints(this.server as any);
+
+        // Intercept addTool to add logging and error handling
+        const originalAddTool = this.server.addTool.bind(this.server);
+        this.server.addTool = (tool: any) => {
+            this.toolRegistry.set(tool.name, tool);
+            const originalExecute = tool.execute;
+            
+            tool.execute = async (args: any, context: any) => {
+                const startTime = Date.now();
+                try {
+                    const result = await originalExecute(args, context);
+                    const duration = Date.now() - startTime;
+                    logToolInvocation(tool.name, args, result, duration, true);
+                    recordToolInvocation(tool.name, duration / 1000, true);
+                    return result;
+                } catch (error: any) {
+                    const duration = Date.now() - startTime;
+                    
+                    // Sentry Error Tracking
+                    if (process.env.SENTRY_DSN) {
+                        Sentry.withScope((scope) => {
+                            scope.setTags({ tool: tool.name, success: 'false' });
+                            scope.setExtra('args', args);
+                            Sentry.captureException(error);
+                        });
+                    }
+
+                    logError(`Tool:${tool.name}`, error, { args, duration });
+                    logToolInvocation(tool.name, args, error.message, duration, false);
+                    recordToolInvocation(tool.name, duration / 1000, false);
+                    recordError('tool_failure', tool.name);
+                    
+                    const sanitized = sanitizeErrorForClient(error);
+                    return JSON.stringify(sanitized, null, 2);
+                }
+            };
+            return originalAddTool(tool);
+        };
+    }
+
+    /**
+     * Add a tool to the server
+     */
+    public addTool(tool: any) {
+        return this.server.addTool(tool);
+    }
+
+    /**
+     * Start the server
+     */
+    public async start() {
+        const useStdio = process.argv.slice(2).includes("--stdio") || process.argv.slice(2).includes("--stdio");
+        if (useStdio) {
+            // @ts-ignore
+            return this.server.start({ transportType: "stdio" });
+        } else {
+            const port = parseInt(process.env.PORT || "3010");
+            // @ts-ignore
+            return this.server.start({
+                transportType: "httpStream",
+                httpStream: { port }
+            });
+        }
+    }
+
+    /**
+     * Get the tool registry
+     */
+    public getRegistry() {
+        return this.toolRegistry;
+    }
+}

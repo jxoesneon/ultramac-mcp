@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  ultramac-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ultramac-mcp
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=production
+      - ULTRAMAC_MCP_API_KEY=${ULTRAMAC_MCP_API_KEY:-umcp_development_key_insecure}
+      - LOG_LEVEL=info
+    volumes:
+      # Persist logs
+      - logs:/home/automation/.ultramac-mcp/logs
+      # Mount action history
+      - action-history:/home/automation/.ultramac-mcp/history
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "run",
+          "-e",
+          "import {livenessProbe} from './src/health.ts'; const result = await livenessProbe(); process.exit(result.alive ? 0 : 1);",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (except volumes)
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  logs:
+    driver: local
+  action-history:
+    driver: local

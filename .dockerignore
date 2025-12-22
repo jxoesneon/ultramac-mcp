@@ -1,0 +1,55 @@
+# Docker ignore - reduce image size and build time
+node_modules/
+dist/
+build/
+*.log
+
+# Tests
+__tests__/
+*.test.ts
+vitest.config.ts
+coverage/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Development configs
+.editorconfig
+.prettierrc
+.eslintrc*
+
+# Artifacts (not needed in container)
+.gemini/
+artifacts/
+
+# Test files
+test_*.ts

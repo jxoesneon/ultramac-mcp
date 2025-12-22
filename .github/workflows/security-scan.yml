@@ -1,0 +1,58 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: "0 9 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run npm audit
+        run: npm audit --json > audit-results.json || true
+        continue-on-error: true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+      - name: Check for critical vulnerabilities
+        run: |
+          CRITICAL=$(npm audit --json | grep -c '"severity":"critical"' || echo "0")
+          HIGH=$(npm audit --json | grep -c '"severity":"high"' || echo "0")
+
+          if [ "$CRITICAL" -gt "0" ]; then
+            echo "❌ $CRITICAL critical vulnerabilities found"
+            exit 1
+          fi
+
+          if [ "$HIGH" -gt "0" ]; then
+            echo "⚠️  $HIGH high vulnerabilities found"
+            exit 1
+          fi
+
+          echo "✅ No critical or high vulnerabilities found"

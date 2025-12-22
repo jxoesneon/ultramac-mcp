@@ -1,0 +1,116 @@
+---
+---
+
+/* Custom Premium Overrides for UltraMac MCP */
+
+// Function to fake glassmorphism
+@mixin glass($opacity: 0.1, $blur: 10px) {
+  background: rgba(255, 255, 255, $opacity);
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+// Variables Override (San Francisco Font Stack)
+$system-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+  "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+  sans-serif;
+$code-font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Menlo", "Monaco",
+  "Consolas", "Liberation Mono", "Courier New", monospace;
+
+body {
+  font-family: $system-font-family;
+  background: #0d1117 !important; // Deep GitHub/Mac terminal dark
+  color: #c9d1d9 !important;
+}
+
+// Sidebar Glassmorphism
+.side-bar {
+  background: linear-gradient(
+    180deg,
+    rgba(22, 27, 34, 0.95) 0%,
+    rgba(13, 17, 23, 0.95) 100%
+  ) !important;
+  border-right: 1px solid rgba(48, 54, 61, 0.5);
+  .site-title {
+    color: #58a6ff !important; // Mac Blue
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+}
+
+// Search Bar
+.search-input {
+  @include glass(0.05, 5px);
+  border-radius: 8px !important;
+  color: white !important;
+  border: 1px solid #30363d !important;
+  &:focus {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: #58a6ff !important;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+  }
+}
+
+// Main Content Typography
+.main-content {
+  h1,
+  h2,
+  h3 {
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    background: -webkit-linear-gradient(
+      45deg,
+      #58a6ff,
+      #bc8cff
+    ); // Gradient Text
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #30363d;
+  }
+
+  code {
+    background: rgba(110, 118, 129, 0.4) !important;
+    border-radius: 4px;
+    color: #a5d6ff;
+  }
+
+  pre {
+    @include glass(0.05, 5px);
+    border-radius: 8px;
+    border: 1px solid #30363d;
+  }
+
+  // Links
+  a {
+    color: #58a6ff;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  // Callouts
+  .callout {
+    border-radius: 8px;
+    border-left: 4px solid;
+    background: rgba(22, 27, 34, 0.5);
+  }
+}
+
+// Interactive Elements
+.btn {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+}
