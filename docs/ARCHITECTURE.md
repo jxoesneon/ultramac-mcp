@@ -202,7 +202,7 @@ sequenceDiagram
 | **Runtime**       | Bun             | 1.3+    |
 | **Language**      | TypeScript      | 5.x     |
 | **MCP Framework** | FastMCP         | Latest  |
-| **Automation**    | nut.js          | Latest  |
+| **Automation**    | nut.js (`@nut-tree-fork/nut-js`) | 4.2.x  |
 | **OCR**           | Tesseract.js    | Latest  |
 | **AI/ML**         | Transformers.js | Latest  |
 | **Logging**       | Winston         | 3.19.0  |

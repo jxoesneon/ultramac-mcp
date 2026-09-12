@@ -29,6 +29,12 @@ UltraMac MCP is built on a modular, service-oriented architecture designed for s
 - **Tools**: Decoupled, type-safe implementations of MCP tools.
 - **Server**: Robust `FastMCP` wrapper with resilient connection handling.
 
+The desktop-automation layer (mouse/keyboard/screen) is provided by the
+[`@nut-tree-fork/nut-js`](https://www.npmjs.com/package/@nut-tree-fork/nut-js)
+dependency (the maintained community fork of the subscription-gated official
+nut.js). It is installed as a normal npm package via `bun install` and covered
+by the Bun lockfile and CI dependency auditing.
+
 ## 📦 Installation
 
 ### Option 1: Quick Start (with `furi`)
@@ -88,7 +94,7 @@ UltraMac MCP works out of the box for local development. For production environm
 | `ULTRAMAC_MCP_API_KEY`        | API Key for client authentication.             | _None_          | Yes             |
 | `ULTRAMAC_MCP_HISTORY_SECRET` | Secret key for encrypting action history logs. | `dev_secret...` | Yes             |
 | `ULTRAMAC_MCP_DISABLE_AUTH`   | Disable authentication checks (Dev only).      | `false`         | No              |
-| `PORT`                        | Port for the HTTP server.                      | `3000`          | No              |
+| `PORT`                        | Port for the HTTP server.                      | `3010`          | No              |
 | `SENTRY_DSN`                  | DSN for Sentry error tracking.                 | _Disabled_      | No              |
 | `NODE_ENV`                    | Environment mode (`development`/`production`). | `development`   | No              |
 
