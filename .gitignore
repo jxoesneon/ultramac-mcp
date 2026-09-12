@@ -163,3 +163,6 @@ _site
 *.swp
 .DS_Store
 Thumbs.db
+
+# Runtime caches (not part of the source)
+.fastembed_cache/
