@@ -26,11 +26,31 @@ Legend: `[x]` done, `[ ]` planned.
 - [x] **Update ARCHITECTURE.md** to point the automation layer at the
       `@nut-tree-fork/nut-js` dependency (tech-stack table + README). The
       Mermaid diagram's generic "nut.js" node remains accurate.
+- [x] **Token-efficiency category filtering** — `--category=mouse,keyboard,...`
+      exposes only the tool surface you need (shipped with tests).
 - [ ] **Document migration notes** in `docs/` (why the fork, how to upgrade,
       how the native bindings load) for future maintainers.
 - [ ] **Add a reproducibility check** for the security test suite so the
       `security-utils.test.ts` path-sanitization assertion no longer depends
       on the repo's location relative to `os.homedir()`.
+
+---
+
+## 🚀 Market Readiness & Distribution
+
+- [x] **Market analysis** — `docs/MARKET_ANALYSIS.md` (ecosystem, competitors,
+      opportunities, strategy).
+- [x] **Security-first README** rewrite + competitor comparison table.
+- [x] **SECURITY.md** — security model, threat model, vulnerability reporting.
+- [x] **Registry submission packet** — `docs/REGISTRY_SUBMISSION.md` with
+      copy-paste listings.
+- [x] **Enterprise/monetization plan** — `docs/ENTERPRISE_PLAN.md` (positioning,
+      free core + $19–49/mo Enterprise, metrics).
+- [ ] **Submit to registries** — PulseMCP, Glama, Smithery, mcp.so, Official
+      Registry (packet prepared; manual submission required).
+- [ ] **Publish GitHub release** — tag v1.0.0 with release notes.
+- [ ] **Add GitHub topics** — `mcp`, `macos`, `automation`, `ocr`,
+      `computer-use`.
 
 ---
 
