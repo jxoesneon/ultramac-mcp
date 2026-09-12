@@ -96,4 +96,25 @@ describe('MCPServer', () => {
          
          expect(mockStart).toHaveBeenCalled();
     });
+
+    it('should categorize tools by name', () => {
+        server = new MCPServer();
+        expect(server.categorizeTool('mouseClick')).toBe('mouse');
+        expect(server.categorizeTool('keyControl')).toBe('keyboard');
+        expect(server.categorizeTool('screenshot')).toBe('vision');
+        expect(server.categorizeTool('systemCommand')).toBe('admin');
+        expect(server.categorizeTool('sleep')).toBe('admin');
+        expect(server.categorizeTool('someOther')).toBe('automation');
+    });
+
+    it('should only register tools in the selected categories (token efficiency)', () => {
+        server = new MCPServer('UltraMac MCP', '1.0.0', ['mouse']);
+        const mouseTool = { name: 'mouseClick', description: 'd', parameters: {} as any, execute: vi.fn() };
+        const keyTool = { name: 'keyControl', description: 'd', parameters: {} as any, execute: vi.fn() };
+        server.addTool(mouseTool);
+        server.addTool(keyTool);
+        const registry = server.getRegistry();
+        expect(registry.has('mouseClick')).toBe(true);
+        expect(registry.has('keyControl')).toBe(false);
+    });
 });

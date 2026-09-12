@@ -66,7 +66,11 @@ async function bootstrap() {
     checkPermissions();
 
     // Create Server Instance
-    const server = new MCPServer("Local UltraMac MCP", "2.0.0-enterprise");
+    const categoryArg = process.argv.find((a: string) => a.startsWith('--category='));
+    const categoriesEnabled = categoryArg && categoryArg.split('=')[1]
+        ? categoryArg.split('=')[1]!.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined;
+    const server = new MCPServer("Local UltraMac MCP", "2.0.0-enterprise", categoriesEnabled);
 
     // Register Tools
     registerMouseTools(server);

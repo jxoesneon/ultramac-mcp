@@ -22,7 +22,7 @@ export class MCPServer {
     private name: string;
     private version: string;
 
-    constructor(name: string = "UltraMac MCP", version: string = "1.0.0") {
+    constructor(name: string = "UltraMac MCP", version: string = "1.0.0", private categoriesEnabled?: string[]) {
         this.name = name;
         this.version = version;
         
@@ -43,6 +43,15 @@ export class MCPServer {
         // Intercept addTool to add logging and error handling
         const originalAddTool = this.server.addTool.bind(this.server);
         this.server.addTool = (tool: any) => {
+            // Token-efficiency filter: skip registering tools outside the
+            // allowed category set, so only the requested tool surface is
+            // exposed to the model (cuts context-window overhead).
+            if (this.categoriesEnabled && this.categoriesEnabled.length > 0) {
+                const toolCategory = this.categorizeTool(tool.name);
+                if (!this.categoriesEnabled.includes(toolCategory)) {
+                    return; // skip registering this tool
+                }
+            }
             this.toolRegistry.set(tool.name, tool);
             const originalExecute = tool.execute;
             
@@ -109,5 +118,19 @@ export class MCPServer {
      */
     public getRegistry() {
         return this.toolRegistry;
+    }
+
+    /**
+     * Infer the tool category from its name so the token-efficiency filter can
+     * select which tools to expose. Tools are grouped by their semantic prefix.
+     */
+    public categorizeTool(name: string): string {
+        if (name.startsWith('mouse')) return 'mouse';
+        if (name.startsWith('key') || name === 'type' || name.startsWith('type')) return 'keyboard';
+        if (name === 'screenshot' || name.startsWith('screen') || name.startsWith('color')
+            || name.startsWith('get_ui') || name.startsWith('find_') || name.startsWith('wait_')) return 'vision';
+        if (name.startsWith('system') || name.startsWith('sleep') || name.startsWith('get_windows')
+            || name.startsWith('window') || name.startsWith('get_action')) return 'admin';
+        return 'automation';
     }
 }

@@ -4,36 +4,89 @@
 [![License: ISC](https://img.shields.io/badge/License-ISC-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)]()
+[![Test Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)]()
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/jxoesneon)
 
-**UltraMac MCP** is the premier Model Context Protocol (MCP) server for macOS desktop automation. Engineered for enterprise-grade reliability and security, it empowers AI assistants to interact with the desktop environment with human-like precision and control.
+**UltraMac MCP is the enterprise-grade, secure macOS desktop-automation layer
+for AI agents.** It gives model-context-protocol (MCP) clients — Claude Desktop,
+Claude Code, Cursor, Windsurf, Gemini, and any MCP-enabled assistant — the ability
+to see, click, type, and drive the whole Mac: mouse, keyboard, screenshots, OCR,
+icon finding, window management, and UI-tree inspection.
+
+Where other desktop-automation servers chase breadth, UltraMac leads with
+**governance and trust**: audit logging, rate limiting, input sanitization, and
+AES-256-GCM-encrypted action history — so organisations can let agents control a
+Mac without giving up control themselves.
 
 ---
 
 ## 🚀 Features
 
-- **🖱️ Precision Mouse Control**: Click, double-click, drag, scroll, and smooth path movement with pixel-perfect accuracy.
-- **⌨️ Advanced Keyboard Input**: Type text, execute system shortcuts, and manage key states.
-- **📸 Intelligent Vision**: High-performance screen capture, real-time OCR (Optical Character Recognition), and icon detection.
-- **🪟 Window Management**: List, focus, move, resize, and minimize application windows.
-- **🔍 UI Inspection**: Analyze screen content, detect colors, and wait for visual elements to appear.
-- **🛡️ Enterprise Security**: Built-in input sanitization, rate limiting, and comprehensive audit logging.
+- **🖱️ Precision Mouse Control** — click, double-click, drag, scroll, and smooth
+  path movement with pixel-perfect accuracy.
+- **⌨️ Advanced Keyboard Input** — type text, execute system shortcuts, and manage
+  key states.
+- **📸 Intelligent Vision** — high-performance screen capture, real-time OCR, and
+  icon/text detection.
+- **🪟 Window Management** — list, focus, move, resize, and minimize application
+  windows.
+- **🔍 UI Inspection** — analyze screen content, detect colors, and wait for visual
+  elements to appear.
+- **🛡️ Enterprise Security** — built-in input sanitization, rate limiting,
+  API-key auth, AES-256-GCM-encrypted action history, and comprehensive audit
+  logging. See [SECURITY.md](SECURITY.md).
+
+---
 
 ## 🏗️ Architecture
 
-UltraMac MCP is built on a modular, service-oriented architecture designed for scalability and maintainability:
+UltraMac MCP is built on a modular, service-oriented architecture:
 
-- **Core**: Centralized error handling, security, logging, and metrics.
-- **Services**: Specialized domains for OCR, Vision, UI, and System interop.
-- **Tools**: Decoupled, type-safe implementations of MCP tools.
-- **Server**: Robust `FastMCP` wrapper with resilient connection handling.
+- **Core:** centralized error handling, security, logging, metrics.
+- **Services:** OCR, Vision, UI, and System interop.
+- **Tools:** decoupled, type-safe MCP tools (mouse, keyboard, screen, automation).
+- **Server:** robust `FastMCP` wrapper with resilient connection handling.
 
 The desktop-automation layer (mouse/keyboard/screen) is provided by the
 [`@nut-tree-fork/nut-js`](https://www.npmjs.com/package/@nut-tree-fork/nut-js)
 dependency (the maintained community fork of the subscription-gated official
-nut.js). It is installed as a normal npm package via `bun install` and covered
-by the Bun lockfile and CI dependency auditing.
+nut.js) — installed as a pinned npm package and covered by the Bun lockfile and
+CI dependency auditing.
+
+**Token efficiency.** Tool definitions cost context window. UltraMac supports
+`--category=` filtering so you expose only the tools you need:
+
+```bash
+# Serve only mouse + keyboard tools
+bun run index.ts --stdio --category=mouse,keyboard
+```
+
+Categories: `mouse`, `keyboard`, `vision` (screen/OCR/UI), `admin` (system/
+window), `automation` (misc, default).
+
+---
+
+## 📊 Why UltraMac MCP?
+
+| Capability | **UltraMac MCP** | Peekaboo | ToolPiper | LMCP |
+| --- | :---: | :---: | :---: | :---: |
+| **macOS-native automation** (mouse/keyboard/apps) | ✅ | ✅ (screen/GUI) | ✅ | ✅ |
+| **OCR + vision / icon finding** | ✅ | partial | ✅ | — |
+| **Audit logging** | ✅ | — | — | — |
+| **Rate limiting** | ✅ | — | — | — |
+| **Input sanitization / path allowlist** | ✅ | — | — | — |
+| **AES-256-GCM-encrypted action history** | ✅ | — | — | — |
+| **API-key auth** | ✅ | — | — | — |
+| **Docker / self-host** | ✅ | — | — | ✅ (native) |
+| **On-device local model inference** | — | — | ✅ | — |
+| **Open source (ISC)** | ✅ | ✅ (MIT) | ❌ (closed) | — |
+| **Browser automation** | — | — | ✅ | — |
+
+**The takeaway:** UltraMac MCP is the only one of these that is *macOS-native +
+protected by an enterprise security surface*. Choose it when governance and
+trust matter.
+
+---
 
 ## 📦 Installation
 
@@ -76,6 +129,9 @@ furi start jxoesneon/ultramac-mcp
 
     # Stdio Transport (For CLI integration)
     bun run index.ts --stdio
+
+    # Filter to a subset of tool categories (reduce context overhead)
+    bun run index.ts --stdio --category=mouse,keyboard
     ```
 
 4.  **Run Tests:**
@@ -85,27 +141,38 @@ furi start jxoesneon/ultramac-mcp
     bun run test:coverage # Generate coverage report
     ```
 
+---
+
 ## ⚙️ Configuration
 
-UltraMac MCP works out of the box for local development. For production environments, the following variables are supported:
+UltraMac MCP works out of the box for local development. For production
+environments, the following variables are supported:
 
-| Variable                      | Description                                    | Default         | Required (Prod) |
-| :---------------------------- | :--------------------------------------------- | :-------------- | :-------------- |
-| `ULTRAMAC_MCP_API_KEY`        | API Key for client authentication.             | _None_          | Yes             |
-| `ULTRAMAC_MCP_HISTORY_SECRET` | Secret key for encrypting action history logs. | `dev_secret...` | Yes             |
-| `ULTRAMAC_MCP_DISABLE_AUTH`   | Disable authentication checks (Dev only).      | `false`         | No              |
-| `PORT`                        | Port for the HTTP server.                      | `3010`          | No              |
-| `SENTRY_DSN`                  | DSN for Sentry error tracking.                 | _Disabled_      | No              |
-| `NODE_ENV`                    | Environment mode (`development`/`production`). | `development`   | No              |
+| Variable | Purpose | Default | Required (Prod) |
+| :--- | :--- | :--- | :--- |
+| `ULTRAMAC_MCP_API_KEY` | API Key for client authentication. | _None_ | Yes |
+| `ULTRAMAC_MCP_HISTORY_SECRET` | Secret key for encrypting action history logs. | `dev_secret...` | Yes |
+| `ULTRAMAC_MCP_DISABLE_AUTH` | Disable authentication checks (Dev only). | `false` | No |
+| `PORT` | Port for the HTTP server. | `3010` | No |
+| `SENTRY_DSN` | DSN for Sentry error tracking. | _Disabled_ | No |
+| `NODE_ENV` | Environment mode (`development`/`production`). | `development` | No |
+
+---
 
 ## 🔒 Permissions & Security
 
-On the first launch, macOS will request the following permissions. **These are required for automation functionality:**
+On the first launch, macOS will request the following permissions. **These are
+required for automation functionality:**
 
-1.  **Accessibility**: For controlling the mouse and keyboard.
-2.  **Screen Recording**: For capturing screenshots and analyzing screen content.
+1.  **Accessibility** — for controlling the mouse and keyboard.
+2.  **Screen Recording** — for capturing screenshots and analyzing screen content.
 
-> **Security Note**: This project undergoes regular internal security audits. It includes built-in safeguards against injection attacks and enforces strict input validation.
+> **Security Note:** UltraMac MCP ships with built-in safeguards against
+> injection attacks, strict input validation, rate limiting, API-key auth, and
+> encrypted action history. Read the full [SECURITY.md](SECURITY.md) and the
+> [threat model](SECURITY.md#threat-model).
+
+---
 
 ## 🛠️ Tool Reference
 
@@ -124,9 +191,19 @@ On the first launch, macOS will request the following permissions. **These are r
 - `getWindows`, `windowControl`
 - `get_action_history` (Admin)
 
+---
+
+## 📈 Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the living product plan and
+[MARKET_ANALYSIS.md](docs/MARKET_ANALYSIS.md) for the competitive landscape.
+
+---
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please read our [CONTRIBUTING.md](CONTRIBUTING.md)
+for details on our code of conduct and the process for submitting pull requests.
 
 ## 💖 Support
 
