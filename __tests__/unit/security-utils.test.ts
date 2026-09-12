@@ -104,30 +104,22 @@ describe('Safe Command Execution (safeExecSync)', () => {
 
     it('should sanitize arguments', () => {
         (execSync as any).mockReturnValue(Buffer.from("ok"));
-        
-        safeExecSync('osascript', ['test; rm -rf /']);
-        
-        // Expect sanitized args
-        // "test; rm -rf /" -> resolved to absolute path containing "test rm -rf " (semicolon removed by sanitizeShellArg)
-        // But sanitizeFilePath resolves it.
-        // If "test; rm -rf /" is in CWD.
-        // Then `safeExecSync` calls `sanitizeFilePath` -> absolute path.
-        // Then `sanitizeShellArg` -> removes `;`.
-        
-        // We mocked execSync AND safeExecSync uses it.
-        // But what about sanitizeFilePath? It uses `path.resolve`. 
-        // We didn't mock path.resolve.
-        // So it resolves to /Users/meilynlopezcubero/ultramac-mcp/test rm -rf / (semicolon gone).
-        
-        // We just check that execSync is called with the sanitized string.
-        // The check inside safeExecSync loops.
-        // We just need to match what it calls.
-        
-        const expectedCmdStart = 'osascript ';
+
+        // Use a /tmp/ path: safeExecSync's path branch explicitly allowlists
+        // /tmp/-prefixed paths, so this is deterministic regardless of the
+        // repo's location relative to os.homedir(). The input contains a
+        // shell metacharacter (;) that must be stripped before execution.
+        safeExecSync('osascript', ['/tmp/test; rm -rf /']);
+
+        // Expect sanitized args: the ";" shell metachar must be removed.
+        // Do not assert the exact resolved path (path.resolve() normalization
+        // differs across OSes/runners); just verify the metachar is gone and
+        // the tokens survive.
         expect(execSync).toHaveBeenCalled();
         const callArgs = (execSync as any).mock.calls.find((call: any[]) => call[0].startsWith('osascript'));
+        expect(callArgs[0]).toContain('test');
+        expect(callArgs[0]).toContain('rm -rf');
         expect(callArgs[0]).not.toContain(';');
-        expect(callArgs[0]).toContain('test rm -rf');
     });
     
     it('should allow valid temp file paths', () => {
