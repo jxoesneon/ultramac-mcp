@@ -130,8 +130,6 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-!nutjs/**
-
 # Jekyll Artifacts
 _site
 .sass-cache
