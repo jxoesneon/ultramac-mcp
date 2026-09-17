@@ -18,10 +18,12 @@ export async function runAS(script: string): Promise<string> {
  * Run a JXA (JavaScript for Automation) script and return its output
  */
 export function runJXA(script: string): string {
-  const { execSync } = require('child_process');
-  // Wrap script in an osascript call with JXA language flag
-  const osaCommand = `osascript -l JavaScript <<'EOF'
-${script}
-EOF`;
-  return execSync(osaCommand, { encoding: 'utf8' }).trim();
+  const { execFileSync } = require('child_process');
+  // Pass the script via stdin (no shell, no heredoc) so script content can
+  // never break out into shell — osascript reads the program from stdin
+  // when no file operand is given.
+  return execFileSync('osascript', ['-l', 'JavaScript'], {
+    input: script,
+    encoding: 'utf8',
+  }).trim();
 }

@@ -7,6 +7,8 @@
 
 import { getNutjs, isNutjsAvailable } from '../server/nutjs-integration';
 import { safeExecSync } from '../core/security-utils';
+import { imageContent } from 'fastmcp';
+import { openWindows } from 'get-windows';
 
 /**
  * Get screen dimensions and information
@@ -42,7 +44,6 @@ export async function getScreenDimensions(): Promise<string> {
  * Capture a screenshot
  */
 export async function captureScreenshot(mode: string, options: any): Promise<any> {
-    const { imageContent } = require('fastmcp');
     const path = require('path');
     const os = require('os');
     const fs = require('fs');
@@ -60,10 +61,13 @@ export async function captureScreenshot(mode: string, options: any): Promise<any
     } else if (mode === "window") {
       let targetId = options.windowId;
       if (!targetId && options.windowName) {
-        const { openWindows } = require("get-windows");
         const allWindows = await openWindows();
-        const targetWin = allWindows.find((w: any) => w.title && w.title.includes(options.windowName));
-        if (!targetWin) throw new Error(`Window containing title "${options.windowName}" not found`);
+        const q = options.windowName.toLowerCase();
+        const targetWin = allWindows.find((w: any) =>
+            (w.title && w.title.toLowerCase().includes(q)) ||
+            (w.owner?.name && w.owner.name.toLowerCase().includes(q)) ||
+            (w.owner?.bundleId && w.owner.bundleId.toLowerCase().includes(q)));
+        if (!targetWin) throw new Error(`No window matching "${options.windowName}" found (searched title, app name, bundleId)`);
         targetId = targetWin.id;
       }
       if (!targetId) throw new Error("Could not determine target window ID");

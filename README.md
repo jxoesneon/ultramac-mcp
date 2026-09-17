@@ -1,6 +1,6 @@
 # UltraMac MCP
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](package.json)
 [![License: ISC](https://img.shields.io/badge/License-ISC-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
@@ -188,8 +188,18 @@ required for automation functionality:**
 
 ### Management
 
-- `getWindows`, `windowControl`
-- `get_action_history` (Admin)
+- `list_windows`, `recent_process_logs`
+- `get_action_history`, `replay_action`, `clear_action_history`, `metrics` (Admin)
+
+### Tool naming
+
+Canonical tool names by purpose — prefer these when calling tools:
+
+- Clicks: `mouseClick` (alias `click`), `click_element`, `click_in_window`
+- Typing: `type`, `type_into_element`
+- Discovery: `list_windows`, `get_ui_tree`, `find_element`, `find_text_on_screen`
+- Verify: `element_contains_text`, `assert_element_exists`, `wait_for_ui_element`
+- Logs: `recent_process_logs`
 
 ---
 

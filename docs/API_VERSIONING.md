@@ -12,7 +12,7 @@ ultramac-mcp follows semantic versioning (SemVer) for API stability and backward
 - **MINOR**: New tools or backwards-compatible features
 - **PATCH**: Bug fixes, performance improvements
 
-**Current Version**: `1.0.0`
+**Current Version**: `1.1.0`
 
 ## Version Header
 
@@ -130,6 +130,19 @@ server.addTool({
 ```
 
 ## Version Changelog
+
+### v1.1.0 (2026-09-17)
+
+**Element-Semantic Actions & Targeting**
+
+- 7 new tools (34 total): `click_element`, `type_into_element`,
+  `click_in_window`, `element_contains_text`, `assert_element_exists`,
+  `recent_process_logs`, `list_windows`
+- `click` alias for `mouseClick`
+- Process/window targeting (`process`, `pid`, `window`) on all
+  element-query tools
+- Case-insensitive window matching across title, app name, bundleId
+- JXA injection hardening (`JSON.stringify` encoding, stdin exec)
 
 ### v1.0.0 (2025-12-22)
 

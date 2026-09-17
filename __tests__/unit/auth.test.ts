@@ -85,4 +85,89 @@ describe('Auth Module', () => {
   it('should return null for client info of invalid key', () => {
     expect(getClientInfo('invalid')).toBe(null);
   });
+
+  it('should allow access with api_key query param variant', () => {
+    initializeAuth();
+    const request = {
+      headers: {},
+      query: { api_key: 'test-key-123' }
+    };
+    expect(authMiddleware(request)).toBe(true);
+  });
+
+  it('should log ip and user-agent when key is missing in production', () => {
+    const request = {
+      headers: { 'user-agent': 'test-agent' },
+      ip: '203.0.113.10'
+    };
+    expect(() => authMiddleware(request)).toThrow('Missing API key');
+  });
+
+  it('should throw for empty key when keys are configured', () => {
+    initializeAuth();
+    expect(() => validateApiKey('')).toThrow('Invalid API key');
+  });
+
+  it('should warn when no API key provided but keys are configured in dev', () => {
+    process.env.NODE_ENV = 'development';
+    generateApiKey('dev-warn-client');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const request = { headers: {} };
+    expect(authMiddleware(request)).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('No API key provided')
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('should throw when the rate limit is exceeded', () => {
+    const key = generateApiKey('rate-limited-client');
+    // Limiter allows 10 requests per second per client id
+    for (let i = 0; i < 10; i++) {
+      expect(validateApiKey(key)).toBe(true);
+    }
+    expect(() => validateApiKey(key)).toThrow('Rate limit exceeded');
+  });
+
+  it('should allow empty key in non-production when no keys are configured', async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = 'test';
+    delete process.env.ULTRAMAC_MCP_API_KEY;
+    const freshAuth = await import('../../src/core/auth');
+    expect(freshAuth.validateApiKey('')).toBe(true);
+  });
+
+  it('should initialize auth on module import outside test env', async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = 'production';
+    process.env.ULTRAMAC_MCP_API_KEY = 'imported-env-key';
+    const freshAuth = await import('../../src/core/auth');
+    const info = freshAuth.getClientInfo('imported-env-key');
+    expect(info?.name).toBe('Environment Key');
+  });
+
+  it('should generate a development key on import when no env key outside production', async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = 'development';
+    delete process.env.ULTRAMAC_MCP_API_KEY;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const freshAuth = await import('../../src/core/auth');
+    expect(freshAuth.listApiKeys().length).toBeGreaterThan(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('No API key set')
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('should log an error on import when no key is configured in production', async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = 'production';
+    delete process.env.ULTRAMAC_MCP_API_KEY;
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await import('../../src/core/auth');
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining('No API key configured in production')
+    );
+    errSpy.mockRestore();
+  });
 });

@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { performHealthCheck, livenessProbe, readinessProbe, registerHealthEndpoints } from '../../src/core/health';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { performHealthCheck, livenessProbe, readinessProbe, registerHealthEndpoints, resetStartTime } from '../../src/core/health';
 
 describe('Health Module', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    // Restore any spies (e.g. process.memoryUsage) installed by tests
+    vi.restoreAllMocks();
   });
 
   it('should perform health check and return healthy status', async () => {
@@ -93,5 +98,28 @@ describe('Health Module', () => {
     // The previous error was unrelated to restore.
     
     // NOTE: PerformHealthCheck uses `os.totalmem()`.
+  });
+
+  it('should reset the server start time so uptime starts near zero', async () => {
+    resetStartTime();
+    const health = await performHealthCheck();
+    expect(health.uptime).toBeLessThan(5);
+  });
+
+  it('should report not ready when the health check itself throws', async () => {
+    vi.spyOn(process, 'memoryUsage').mockImplementation(() => {
+      throw new Error('memoryUsage unavailable');
+    });
+
+    const readiness = await readinessProbe();
+    expect(readiness.ready).toBe(false);
+    expect(readiness.reason).toContain('Health check error');
+  });
+
+  it('should report the version from npm_package_version when set', async () => {
+    process.env.npm_package_version = '9.9.9';
+    const health = await performHealthCheck();
+    expect(health.version).toBe('9.9.9');
+    delete process.env.npm_package_version;
   });
 });

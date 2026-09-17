@@ -89,6 +89,6 @@ logging, rate limiting, input sanitization, AES-256-GCM-encrypted action history
 - [ ] README rewritten to lead with security + a comparison table (done this PR).
 - [ ] `SECURITY.md` present (done this PR).
 - [ ] A `LICENSE` (ISC) present (already in repo).
-- [ ] Release tag + notes published (v1.0.0).
+- [ ] Release tag + notes published (v1.1.0).
 - [ ] Keywords/topics added to the GitHub repo (Settings → Topics: `mcp`,
   `macos`, `automation`, `ocr`, `computer-use`).
