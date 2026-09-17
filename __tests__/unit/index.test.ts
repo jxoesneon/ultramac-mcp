@@ -97,6 +97,28 @@ const ALL_REGISTER_FNS = [
   'registerVerifyTools',
 ] as const;
 
+// index.ts's checkPermissions() calls native require('node-mac-permissions'),
+// which bypasses vi.mock and hits the real module — a darwin-only package
+// absent on Linux CI. Intercept Module._load to inject the hoisted fakes on
+// any platform. Returns a restore function.
+const patchPermsRequire = async () => {
+  const { default: Module } = await import('node:module');
+  const origLoad = (Module as any)._load;
+  (Module as any)._load = function (this: any, request: string, ...rest: any[]) {
+    if (request === 'node-mac-permissions') {
+      return {
+        getAuthStatus: h.getAuthStatus,
+        askForAccessibilityAccess: h.askForAccessibilityAccess,
+        askForScreenCaptureAccess: h.askForScreenCaptureAccess,
+      };
+    }
+    return origLoad.call(this, request, ...rest);
+  };
+  return () => {
+    (Module as any)._load = origLoad;
+  };
+};
+
 describe('index.ts bootstrap', () => {
   const originalArgv = process.argv;
   const originalEnv = { ...process.env };
@@ -236,44 +258,35 @@ describe('index.ts bootstrap', () => {
   });
 
   it('requests macOS permissions when not authorized', async () => {
-    // checkPermissions() uses plain require(), which bypasses the ESM mock
-    // and hits the real module — patch the real exports via createRequire.
-    const { createRequire } = await import('node:module');
-    const realPerms = createRequire(import.meta.url)('node-mac-permissions');
-    const statusSpy = vi
-      .spyOn(realPerms, 'getAuthStatus')
-      .mockReturnValue('denied');
-    const accessSpy = vi
-      .spyOn(realPerms, 'askForAccessibilityAccess')
-      .mockImplementation(() => {});
-    const screenSpy = vi
-      .spyOn(realPerms, 'askForScreenCaptureAccess')
-      .mockImplementation(() => {});
+    // checkPermissions() uses plain require(), which bypasses the ESM mock —
+    // intercept Module._load so the native require gets our fake on any
+    // platform (node-mac-permissions is darwin-only and absent on Linux CI).
+    h.getAuthStatus.mockReturnValue('denied');
+    const restore = await patchPermsRequire();
+    try {
+      await import('../../index.ts');
+      await flushBootstrap();
+    } finally {
+      restore();
+    }
 
-    await import('../../index.ts');
-    await flushBootstrap();
-
-    expect(accessSpy).toHaveBeenCalled();
-    expect(screenSpy).toHaveBeenCalled();
-    statusSpy.mockRestore();
-    accessSpy.mockRestore();
-    screenSpy.mockRestore();
+    expect(h.askForAccessibilityAccess).toHaveBeenCalled();
+    expect(h.askForScreenCaptureAccess).toHaveBeenCalled();
   });
 
   it('continues bootstrap when the permissions module fails', async () => {
-    const { createRequire } = await import('node:module');
-    const realPerms = createRequire(import.meta.url)('node-mac-permissions');
-    const statusSpy = vi
-      .spyOn(realPerms, 'getAuthStatus')
-      .mockImplementation(() => {
-        throw new Error('permissions unavailable');
-      });
-
-    await import('../../index.ts');
-    await flushBootstrap();
+    h.getAuthStatus.mockImplementation(() => {
+      throw new Error('permissions unavailable');
+    });
+    const restore = await patchPermsRequire();
+    try {
+      await import('../../index.ts');
+      await flushBootstrap();
+    } finally {
+      restore();
+    }
 
     expect(h.mockStart).toHaveBeenCalled();
-    statusSpy.mockRestore();
   });
 
   it('exits with code 1 when bootstrap fails', async () => {
