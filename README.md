@@ -188,8 +188,18 @@ required for automation functionality:**
 
 ### Management
 
-- `getWindows`, `windowControl`
-- `get_action_history` (Admin)
+- `list_windows`, `recent_process_logs`
+- `get_action_history`, `replay_action`, `clear_action_history`, `metrics` (Admin)
+
+### Tool naming
+
+Canonical tool names by purpose — prefer these when calling tools:
+
+- Clicks: `mouseClick` (alias `click`), `click_element`, `click_in_window`
+- Typing: `type`, `type_into_element`
+- Discovery: `list_windows`, `get_ui_tree`, `find_element`, `find_text_on_screen`
+- Verify: `element_contains_text`, `assert_element_exists`, `wait_for_ui_element`
+- Logs: `recent_process_logs`
 
 ---
 

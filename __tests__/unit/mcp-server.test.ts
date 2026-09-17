@@ -100,10 +100,18 @@ describe('MCPServer', () => {
     it('should categorize tools by name', () => {
         server = new MCPServer();
         expect(server.categorizeTool('mouseClick')).toBe('mouse');
+        expect(server.categorizeTool('click')).toBe('mouse');
         expect(server.categorizeTool('keyControl')).toBe('keyboard');
         expect(server.categorizeTool('screenshot')).toBe('vision');
+        expect(server.categorizeTool('element_contains_text')).toBe('vision');
+        expect(server.categorizeTool('assert_element_exists')).toBe('vision');
         expect(server.categorizeTool('systemCommand')).toBe('admin');
         expect(server.categorizeTool('sleep')).toBe('admin');
+        expect(server.categorizeTool('recent_process_logs')).toBe('admin');
+        expect(server.categorizeTool('list_windows')).toBe('admin');
+        expect(server.categorizeTool('click_element')).toBe('automation');
+        expect(server.categorizeTool('type_into_element')).toBe('automation');
+        expect(server.categorizeTool('click_in_window')).toBe('automation');
         expect(server.categorizeTool('someOther')).toBe('automation');
     });
 

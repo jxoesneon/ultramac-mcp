@@ -17,6 +17,8 @@ import { registerKeyboardTools } from "./src/tools/keyboard-tools";
 import { registerScreenTools } from "./src/tools/screen-tools";
 import { registerAutomationTools } from "./src/tools/automation-tools";
 import { registerAdminTools } from "./src/tools/admin-tools";
+import { registerElementTools } from "./src/tools/element-tools";
+import { registerVerifyTools } from "./src/tools/verify-tools";
 
 // REDIRECT CONSOLE OUTPUT TO STDERR
 // Prevents contamination of stdout used for JSON-RPC
@@ -78,6 +80,8 @@ async function bootstrap() {
     registerScreenTools(server);
     registerAutomationTools(server);
     registerAdminTools(server);
+    registerElementTools(server);
+    registerVerifyTools(server);
 
     // Shutdown Handlers
     const gracefulShutdown = async (signal: string) => {
