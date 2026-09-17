@@ -72,7 +72,7 @@ async function bootstrap() {
     const categoriesEnabled = categoryArg && categoryArg.split('=')[1]
         ? categoryArg.split('=')[1]!.split(',').map((s: string) => s.trim()).filter(Boolean)
         : undefined;
-    const server = new MCPServer("Local UltraMac MCP", "2.0.0-enterprise", categoriesEnabled);
+    const server = new MCPServer("Local UltraMac MCP", "1.1.0", categoriesEnabled);
 
     // Register Tools
     registerMouseTools(server);
