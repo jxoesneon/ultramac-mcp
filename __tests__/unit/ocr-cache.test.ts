@@ -52,4 +52,26 @@ describe('OCRCache', () => {
     expect(stats.keys).not.toContain('stale');
     vi.useRealTimers();
   });
+
+  it('should evict the oldest entry when max size is reached', () => {
+    const small = new OCRCache(10000, 2);
+    small.set('a', 1);
+    small.set('b', 2);
+    small.set('c', 3); // exceeds maxSize -> evicts 'a'
+
+    expect(small.get('a')).toBeNull();
+    expect(small.get('b')).toBe(2);
+    expect(small.get('c')).toBe(3);
+  });
+
+  it('should update an existing key without evicting at max size', () => {
+    const small = new OCRCache(10000, 2);
+    small.set('a', 1);
+    small.set('b', 2);
+    small.set('a', 10); // 'a' already cached -> no eviction needed
+
+    expect(small.get('a')).toBe(10);
+    expect(small.get('b')).toBe(2);
+    expect(small.getStats().size).toBe(2);
+  });
 });

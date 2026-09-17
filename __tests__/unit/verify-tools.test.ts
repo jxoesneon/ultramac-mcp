@@ -79,6 +79,22 @@ describe('Verify Tools', () => {
         expect(script).toContain('frontmost');
     });
 
+    it('element_contains_text returns FAIL with error when evaluation fails', async () => {
+        (runJXA as any).mockReturnValue('{"error":"target_not_found","detail":"No process matched"}');
+        const tool = registeredTools.get('element_contains_text');
+        const result = await tool.execute({ criteria: 'X', text: 'y', process: 'ghost' });
+        expect(result).toContain('FAIL');
+        expect(result).toContain('could not be evaluated');
+        expect(result).toContain('No process matched');
+    });
+
+    it('element_contains_text falls back to error code when detail is absent', async () => {
+        (runJXA as any).mockReturnValue('{"error":"window_not_found"}');
+        const tool = registeredTools.get('element_contains_text');
+        const result = await tool.execute({ criteria: 'X', text: 'y', window: 'nope' });
+        expect(result).toContain('window_not_found');
+    });
+
     it('element_contains_text returns FAIL with searched count when text is absent', async () => {
         (runJXA as any).mockReturnValue('{"found":false,"searched":7}');
         const tool = registeredTools.get('element_contains_text');
@@ -144,6 +160,14 @@ describe('Verify Tools', () => {
         const [, args] = lastExecArgs();
         expect(args).toContain('300s');
         expect(result).toBe('line2\nline3');
+    });
+
+    it('recent_process_logs reports when no log lines are found', async () => {
+        (execFileSync as any).mockReturnValue('\n\n');
+        const tool = registeredTools.get('recent_process_logs');
+        const result = await tool.execute({ process: 'Safari', seconds: 10 });
+        expect(result).toContain('No log lines found');
+        expect(result).toContain('Safari');
     });
 
     it('recent_process_logs returns an error string when log show fails', async () => {

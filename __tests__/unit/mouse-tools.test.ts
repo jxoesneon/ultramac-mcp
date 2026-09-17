@@ -68,6 +68,10 @@ vi.mock('../../src/core/security-utils', () => ({
     isAlphanumericSafe: vi.fn(() => true)
 }));
 
+vi.mock('../../src/services/image-service', () => ({
+    getHighlightPreview: vi.fn(async () => Buffer.from('png-bytes')),
+}));
+
 describe('Mouse Tools', () => {
     let mockServer: any;
     let registeredTools: Map<string, any>;
@@ -132,6 +136,21 @@ describe('Mouse Tools', () => {
         
         await tool.execute({ direction: 'up', amount: 50 });
         expect(mockScrollUp).toHaveBeenCalledWith(50);
+
+        await tool.execute({ direction: 'left', amount: 7 });
+        expect(mockScrollLeft).toHaveBeenCalledWith(7);
+
+        await tool.execute({ direction: 'right', amount: 9 });
+        expect(mockScrollRight).toHaveBeenCalledWith(9);
+    });
+
+    it('should return a highlight preview without clicking', async () => {
+        mouseTools.registerMouseTools(mockServer as unknown as MCPServer);
+        const tool = registeredTools.get('mouseClick');
+        const result = await tool.execute({ x: 10, y: 20, button: 'left', preview: true });
+        expect(mockClick).not.toHaveBeenCalled();
+        expect(result.content[0].text).toContain('(10, 20)');
+        expect(result.content[1].mimeType).toBe('image/png');
     });
 
     it('should execute mouseDrag', async () => {

@@ -239,6 +239,23 @@ describe('Element Tools', () => {
         expect(result).toContain("in 'Target'");
     });
 
+    it('click_in_window rejects coordinates outside window bounds', async () => {
+        mockOpenWindows.mockResolvedValue([
+            {
+                title: 'Main',
+                id: 1,
+                bounds: { x: 100, y: 50, width: 800, height: 600 },
+                owner: { name: 'Safari', processId: 42, bundleId: 'com.apple.Safari' },
+            },
+        ] as any);
+        elementTools.registerElementTools(mockServer as unknown as MCPServer);
+        const tool = registeredTools.get('click_in_window');
+        const result = await tool.execute({ x: 900, y: 20, window: 'main', button: 'left' });
+        expect(result).toContain('outside window bounds');
+        expect(mockSetPosition).not.toHaveBeenCalled();
+        expect(mockClick).not.toHaveBeenCalled();
+    });
+
     it('click_in_window returns a not-found message when no window matches', async () => {
         mockOpenWindows.mockResolvedValue([
             {

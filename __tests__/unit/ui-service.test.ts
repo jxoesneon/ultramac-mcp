@@ -6,7 +6,14 @@ vi.mock('../../src/services/applescript-service', () => ({
 }));
 
 import { runJXA } from '../../src/services/applescript-service';
-import { findElement, getUITree } from '../../src/services/ui-service';
+import {
+    buildTargetPreamble,
+    findElement,
+    getActiveWindowInfo,
+    getUITree,
+    scanAppMenus,
+    triggerMenuCommand,
+} from '../../src/services/ui-service';
 
 const lastScript = (): string => {
     const calls = (runJXA as any).mock.calls;
@@ -72,6 +79,13 @@ describe('UI Service — findElement targeting', () => {
         expect(result.found).toBe(false);
         expect(result.error).toBe('No process matched target');
     });
+
+    it('falls back to the raw error code when no detail is provided', async () => {
+        (runJXA as any).mockReturnValue('{"error":"target_not_found"}');
+        const result = await findElement('OK');
+        expect(result.found).toBe(false);
+        expect(result.error).toBe('target_not_found');
+    });
 });
 
 describe('UI Service — getUITree targeting', () => {
@@ -98,5 +112,132 @@ describe('UI Service — getUITree targeting', () => {
             '{"error":"target_not_found","detail":"No process matched target {\\"pid\\":999}"}'
         );
         await expect(getUITree(2, { pid: 999 })).rejects.toThrow('No process matched target');
+    });
+
+    it('throws the detail when the window selector does not match', async () => {
+        (runJXA as any).mockReturnValue(
+            '{"error":"window_not_found","detail":"No window matched selector \\"nope\\""}'
+        );
+        await expect(getUITree(2, { window: 'nope' })).rejects.toThrow(
+            'No window matched selector'
+        );
+    });
+
+    it('throws the raw error code when no detail is provided', async () => {
+        (runJXA as any).mockReturnValue('{"error":"window_not_found"}');
+        await expect(getUITree(2)).rejects.toThrow('window_not_found');
+    });
+});
+
+describe('UI Service — buildTargetPreamble', () => {
+    it('embeds pid, process and window as JSON literals', () => {
+        const preamble = buildTargetPreamble({ process: 'Safari', pid: 42, window: 'Main' });
+        expect(preamble).toContain('var __targetPid = 42;');
+        expect(preamble).toContain('var __targetProc = "Safari";');
+        expect(preamble).toContain('var __targetWin = "Main";');
+    });
+
+    it('emits null literals when no target is given', () => {
+        const preamble = buildTargetPreamble();
+        expect(preamble).toContain('var __targetPid = null;');
+        expect(preamble).toContain('var __targetProc = null;');
+        expect(preamble).toContain('var __targetWin = null;');
+    });
+
+    it('embeds a numeric window index', () => {
+        const preamble = buildTargetPreamble({ window: 2 });
+        expect(preamble).toContain('var __targetWin = 2;');
+    });
+});
+
+describe('UI Service — getActiveWindowInfo', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('returns parsed title and bundleId from JXA output', () => {
+        (runJXA as any).mockReturnValue('{"title":"Editor","bundleId":"com.example.app"}');
+        const info = getActiveWindowInfo();
+        expect(info).toEqual({ title: 'Editor', bundleId: 'com.example.app' });
+        expect(lastScript()).toContain('frontmost');
+    });
+
+    it('returns null when runJXA throws', () => {
+        (runJXA as any).mockImplementation(() => { throw new Error('JXA failed'); });
+        expect(getActiveWindowInfo()).toBeNull();
+    });
+
+    it('returns null when the JXA output is not valid JSON', () => {
+        (runJXA as any).mockReturnValue('not json');
+        expect(getActiveWindowInfo()).toBeNull();
+    });
+});
+
+describe('UI Service — scanAppMenus', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (runJXA as any).mockReturnValue(
+            '{"Copy":{"path":"Edit > Copy","shortcut":"C"},"Quit":{"path":"File > Quit","shortcut":"Q"}}'
+        );
+    });
+
+    it('parses the menu map returned by JXA', async () => {
+        const menus = await scanAppMenus();
+        expect(menus.Copy).toEqual({ path: 'Edit > Copy', shortcut: 'C' });
+        expect(menus.Quit.path).toBe('File > Quit');
+    });
+
+    it('defaults to the frontmost process when no appName is given', async () => {
+        await scanAppMenus();
+        const script = lastScript();
+        expect(script).toContain('frontmost');
+        expect(script).toContain('processes[""]');
+    });
+
+    it('embeds the app name via JSON.stringify for process lookup', async () => {
+        await scanAppMenus('Safari');
+        expect(lastScript()).toContain('processes["Safari"]');
+    });
+
+    it('escapes quotes inside the app name', async () => {
+        await scanAppMenus('Weird "App"');
+        const script = lastScript();
+        expect(script).toContain('Weird \\"App\\"');
+        expect(script).not.toContain('Weird "App"');
+    });
+});
+
+describe('UI Service — triggerMenuCommand', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('returns true and builds quoted path parts for the target app', async () => {
+        const result = await triggerMenuCommand('File > New Tab', 'Safari');
+        expect(result).toBe(true);
+        const script = lastScript();
+        expect(script).toContain('pathParts = ["File", "New Tab"]');
+        expect(script).toContain('processes["Safari"]');
+        expect(runJXA).toHaveBeenCalledTimes(1);
+    });
+
+    it('defaults to the frontmost app when no appName is given', async () => {
+        const result = await triggerMenuCommand('File > Quit');
+        expect(result).toBe(true);
+        const script = lastScript();
+        expect(script).toContain('frontmost');
+        expect(script).toContain('processes[""]');
+    });
+
+    it('escapes double quotes inside menu path parts', async () => {
+        await triggerMenuCommand('Edit > Say "Hi"');
+        const script = lastScript();
+        expect(script).toContain('Say \\"Hi\\"');
+        expect(script).not.toContain('Say "Hi"');
+    });
+
+    it('trims whitespace around path parts', async () => {
+        await triggerMenuCommand('  File  >   Export  ');
+        expect(lastScript()).toContain('pathParts = ["File", "Export"]');
     });
 });

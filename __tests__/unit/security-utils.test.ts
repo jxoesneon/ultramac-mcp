@@ -133,6 +133,11 @@ describe('Safe Command Execution (safeExecSync)', () => {
         // /etc/passwd is not in allowed dirs, so it throws Security Error
         expect(() => safeExecSync('osascript', ['/etc/passwd'])).toThrow(/not in allowed directories/);
     });
+
+    it('should wrap command execution failures in AutomationError', () => {
+        (execSync as any).mockImplementation(() => { throw new Error('exit code 1'); });
+        expect(() => safeExecSync('osascript', ['-e', 'return 1'])).toThrow(/Command failed: osascript - exit code 1/);
+    });
   });
 
   describe('RateLimiter', () => {
