@@ -167,6 +167,29 @@ describe('OCR Service Implementation', () => {
         expect(result.y).toBe(115);
     });
 
+    it('should cache and return failResult when no words match', async () => {
+        mockGet.mockReturnValue(null);
+
+        const mockData = {
+            blocks: [{
+                paragraphs: [{
+                    lines: [{
+                        words: [
+                            { text: 'Hello', bbox: { x0: 1, y0: 1, x1: 5, y1: 5 }, confidence: 80 },
+                            { text: 'World', bbox: { x0: 6, y0: 1, x1: 10, y1: 5 }, confidence: 80 }
+                        ]
+                    }]
+                }]
+            }]
+        };
+        vi.mocked(Tesseract.recognize).mockResolvedValue({ data: mockData } as any);
+
+        const result = await performOCR('MissingText');
+        expect(result.found).toBe(false);
+        expect(result.debugInfo.wordCount).toBe(2);
+        expect(mockSet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ found: false }));
+    });
+
     it('should handle screenshots failure gracefully', async () => {
         mockGet.mockReturnValue(null);
         vi.mocked(securityUtils.safeExecSync).mockImplementation(() => { throw new Error("Snap"); });

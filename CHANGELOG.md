@@ -5,6 +5,46 @@ All notable changes to ultramac-mcp will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-17
+
+### ✨ Features
+
+- **Added** `click_element` — semantic find-and-click in one call (name/label/role)
+- **Added** `type_into_element` — resolve element, focus, and type in one call
+- **Added** `click_in_window` — window-relative pixel clicks with bounds validation
+- **Added** `list_windows` — discover window targets (id, title, owner, pid, bundleId, bounds)
+- **Added** `element_contains_text` — parent-scoped subtree text assertion
+- **Added** `assert_element_exists` — structured pass/fail existence checks
+- **Added** `recent_process_logs` — macOS `log show` retrieval for in-MCP verification
+- **Added** `click` alias for `mouseClick` plus canonical tool names in server instructions
+- **Added** process/window targeting (`process`, `pid`, `window`) to `find_element`,
+  `get_ui_tree`, `wait_for_ui_element`, and all new element tools — background apps
+  are no longer limited to the frontmost window
+- **Added** `description` and `value` fields to `findElement` results
+
+### 📝 Changed
+
+- **Improved** window matching: case-insensitive across title, owner name, and bundleId
+- **Improved** `findElement`/`getUITree` JXA: resolves pid → process name/bundleId →
+  frontmost fallback, then window index → title substring → first window
+- **Improved** `wait_for_ui_element` to fail fast on unrecoverable errors
+- **Updated** tool categorization to cover all 34 registered tool names
+
+### 🔒 Security
+
+- **Fixed** JXA injection via `appName` in `scanAppMenus`/`triggerMenuCommand`
+- **Hardened** all JXA input embedding through `JSON.stringify` encoding
+- **Hardened** `runJXA` to pass scripts via `execFileSync` stdin instead of a
+  heredoc, removing the EOF-breakout vector
+- **Fixed** window-scoped element searches leaking results from other windows
+
+### ✅ Testing
+
+- **Added** 219 tests (309 total, up from 90)
+- **Achieved** 100% line coverage across all modules (99.89% statements,
+  99.44% functions, 93.19% branches)
+- **Added** coverage `include` so unloaded files count toward the report
+
 ## [1.0.0] - 2025-12-22
 
 ### 🎉 Initial Stable Release

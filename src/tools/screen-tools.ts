@@ -6,13 +6,25 @@
  */
 
 import { z } from "zod";
+import { openWindows } from "get-windows";
 import { MCPServer } from "../server/mcp-server";
-import { getNutjs, requireNutjs, isNutjsAvailable } from "../server/nutjs-integration";
+import { getNutjs, requireNutjs } from "../server/nutjs-integration";
 import { getScreenDimensions, captureScreenshot } from "../services/screen-service";
 import { setSpatialFocus } from "../services/spatial-context";
-import { getUITree, findElement } from "../services/ui-service";
+import { getUITree, findElement, type UITarget } from "../services/ui-service";
 import { performOCR } from "../services/ocr-service";
 import { findIcon } from "../services/vision-service";
+
+const targetFields = {
+    process: z.string().optional().describe("Target app by name or bundleId substring, case-insensitive. Default: frontmost."),
+    pid: z.number().optional().describe("Target process PID. Takes precedence over process."),
+    window: z.union([z.string(), z.number()]).optional().describe("Target window: index number or title substring, case-insensitive. Default: first window."),
+};
+
+function toTarget(args: { process?: string; pid?: number; window?: string | number }): UITarget | undefined {
+    if (args.process === undefined && args.pid === undefined && args.window === undefined) return undefined;
+    return { process: args.process, pid: args.pid, window: args.window };
+}
 
 /**
  * Register screen & UI discovery tools
@@ -106,31 +118,33 @@ export function registerScreenTools(server: MCPServer) {
 
   server.addTool({
     name: "get_ui_tree",
-    description: "Get a simplified JSON tree of the active window's UI elements.",
+    description: "Get a simplified JSON tree of the active window's UI elements. Optionally target another app/window.",
     parameters: z.object({
        depth: z.number().optional().default(2),
+       ...targetFields,
     }),
-    execute: async ({ depth }: {depth: number}) => {
-      const result = await getUITree(depth);
+    execute: async (args: {depth: number, process?: string, pid?: number, window?: string | number}) => {
+      const result = await getUITree(args.depth, toTarget(args));
       return JSON.stringify(result, null, 2);
     }
   });
 
   server.addTool({
     name: "find_element",
-    description: "Find a UI element in the active window by its name or role.",
+    description: "Find a UI element by name or role. Optionally target another app/window; returns center coordinates for follow-up clicks.",
     parameters: z.object({
       criteria: z.string(),
       role: z.string().optional(),
+      ...targetFields,
     }),
-    execute: async ({ criteria, role }: {criteria: string, role?: string}) => {
-        const data = await findElement(criteria, role);
+    execute: async (args: {criteria: string, role?: string, process?: string, pid?: number, window?: string | number}) => {
+        const data = await findElement(args.criteria, args.role, toTarget(args));
         if (data.found) {
             const centerX = data.position[0] + (data.size[0] / 2);
             const centerY = data.position[1] + (data.size[1] / 2);
             return `Found '${data.name}' (${data.role}) at (${data.position[0]}, ${data.position[1]}). Center: (${centerX}, ${centerY})`;
         }
-        return "Element not found.";
+        return data.error ? `Element not found: ${data.error}` : "Element not found.";
     }
   });
 
@@ -160,20 +174,46 @@ export function registerScreenTools(server: MCPServer) {
 
   server.addTool({
     name: "wait_for_ui_element",
-    description: "Polls for a UI element to appear by name/role.",
+    description: "Polls for a UI element to appear by name/role. Optionally target another app/window.",
     parameters: z.object({
       criteria: z.string(),
       role: z.string().optional(),
       timeoutMs: z.number().optional().default(10000),
+      ...targetFields,
     }),
-    execute: async ({ criteria, role, timeoutMs }: {criteria: string, role?: string, timeoutMs: number}) => {
+    execute: async (args: {criteria: string, role?: string, timeoutMs: number, process?: string, pid?: number, window?: string | number}) => {
         const startTime = Date.now();
-        while (Date.now() - startTime < timeoutMs!) {
-            const data = await findElement(criteria, role);
-            if (data.found) return `Element "${criteria}" found!`;
+        while (Date.now() - startTime < args.timeoutMs!) {
+            const data = await findElement(args.criteria, args.role, toTarget(args));
+            if (data.found) return `Element "${args.criteria}" found!`;
+            if (data.error) return `Element not found: ${data.error}`;
             await new Promise(r => setTimeout(r, 500));
         }
-        return `Timeout waiting for element "${criteria}"`;
+        return `Timeout waiting for element "${args.criteria}"`;
+    }
+  });
+
+  server.addTool({
+    name: "list_windows",
+    description: "List all on-screen windows with id, title, owner app, pid, bundleId and bounds. Use to discover targets for window/process-scoped tools.",
+    parameters: z.object({
+        process: z.string().optional().describe("Filter by owner app name/bundleId substring (case-insensitive)."),
+    }),
+    execute: async ({ process }: {process?: string}) => {
+        let wins = await openWindows();
+        if (process) {
+            const q = process.toLowerCase();
+            wins = wins.filter((w: any) =>
+                (w.owner?.name && w.owner.name.toLowerCase().includes(q)) ||
+                (w.owner?.bundleId && w.owner.bundleId.toLowerCase().includes(q)) ||
+                (w.title && w.title.toLowerCase().includes(q)));
+        }
+        const out = wins.map((w: any) => ({
+            id: w.id, title: w.title,
+            owner: w.owner?.name, pid: w.owner?.processId, bundleId: w.owner?.bundleId,
+            bounds: w.bounds,
+        }));
+        return JSON.stringify(out, null, 2);
     }
   });
 }

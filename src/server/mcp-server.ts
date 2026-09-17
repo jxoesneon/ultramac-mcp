@@ -32,6 +32,7 @@ export class MCPServer {
         this.server = new FastMCP({
             name: this.name,
             version: this.version as `${number}.${number}.${number}`,
+            instructions: "Canonical tool names — Clicks: mouseClick/click, click_element, click_in_window; Typing: type, type_into_element; Discovery: list_windows, get_ui_tree, find_element, find_text_on_screen; Verify: element_contains_text, assert_element_exists, wait_for_ui_element; Logs: recent_process_logs",
             authenticate: (useStdio || disableAuth) ? undefined : async (req: any) => {
                 return authMiddleware(req) ? {} : undefined;
             }
@@ -99,7 +100,7 @@ export class MCPServer {
      * Start the server
      */
     public async start() {
-        const useStdio = process.argv.slice(2).includes("--stdio") || process.argv.slice(2).includes("--stdio");
+        const useStdio = process.argv.slice(2).includes("--stdio");
         if (useStdio) {
             // @ts-ignore
             return this.server.start({ transportType: "stdio" });
@@ -125,11 +126,15 @@ export class MCPServer {
      * select which tools to expose. Tools are grouped by their semantic prefix.
      */
     public categorizeTool(name: string): string {
-        if (name.startsWith('mouse')) return 'mouse';
+        if (name === 'click' || name.startsWith('mouse')) return 'mouse';
+        if (name === 'click_element' || name === 'type_into_element' || name === 'click_in_window') return 'automation';
         if (name.startsWith('key') || name === 'type' || name.startsWith('type')) return 'keyboard';
-        if (name === 'screenshot' || name.startsWith('screen') || name.startsWith('color')
+        if (name === 'element_contains_text' || name === 'assert_element_exists'
+            || name === 'screenshot' || name === 'set_spatial_focus' || name.startsWith('screen') || name.startsWith('color')
             || name.startsWith('get_ui') || name.startsWith('find_') || name.startsWith('wait_')) return 'vision';
-        if (name.startsWith('system') || name.startsWith('sleep') || name.startsWith('get_windows')
+        if (name === 'recent_process_logs' || name === 'list_windows' || name === 'metrics'
+            || name === 'replay_action' || name === 'clear_action_history'
+            || name.startsWith('system') || name.startsWith('sleep') || name.startsWith('get_windows')
             || name.startsWith('window') || name.startsWith('get_action')) return 'admin';
         return 'automation';
     }

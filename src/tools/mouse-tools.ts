@@ -16,41 +16,52 @@ import { getHighlightPreview } from "../services/image-service";
 export function registerMouseTools(server: MCPServer) {
   const { mouse, Button, Point } = getNutjs();
 
+  const clickParameters = z.object({
+    x: z.number().describe("Horizontal screen coordinate (pixels)"),
+    y: z.number().describe("Vertical screen coordinate (pixels)"),
+    button: z
+      .enum(["left", "right", "middle"])
+      .default("left")
+      .describe("Mouse button to click (default left)"),
+    preview: z.boolean().optional().describe("If true, returns a screenshot with the target highlighted instead of clicking."),
+  });
+
+  const clickExecute = async ({ x, y, button, preview }: {x: number, y: number, button: string, preview?: boolean}) => {
+    requireNutjs();
+
+    if (preview) {
+        const previewBuf = await getHighlightPreview(x, y);
+        return {
+            content: [
+                { type: "text", text: `Preview: Target at (${x}, ${y})` },
+                { type: "image", data: previewBuf.toString("base64"), mimeType: "image/png" }
+            ]
+        };
+    }
+
+    await mouse.setPosition(new Point(x, y));
+    const btn =
+      button === "left"
+        ? Button.LEFT
+        : button === "right"
+        ? Button.RIGHT
+        : Button.MIDDLE;
+    await mouse.click(btn);
+    return `Mouse ${button}-click at (${x}, ${y}) completed.`;
+  };
+
   server.addTool({
     name: "mouseClick",
     description: "Simulate a mouse click at the given screen coordinates.",
-    parameters: z.object({
-      x: z.number().describe("Horizontal screen coordinate (pixels)"),
-      y: z.number().describe("Vertical screen coordinate (pixels)"),
-      button: z
-        .enum(["left", "right", "middle"])
-        .default("left")
-        .describe("Mouse button to click (default left)"),
-      preview: z.boolean().optional().describe("If true, returns a screenshot with the target highlighted instead of clicking."),
-    }),
-    execute: async ({ x, y, button, preview }: {x: number, y: number, button: string, preview?: boolean}) => {
-      requireNutjs();
-      
-      if (preview) {
-          const previewBuf = await getHighlightPreview(x, y);
-          return {
-              content: [
-                  { type: "text", text: `Preview: Target at (${x}, ${y})` },
-                  { type: "image", data: previewBuf.toString("base64"), mimeType: "image/png" }
-              ]
-          };
-      }
-      
-      await mouse.setPosition(new Point(x, y));
-      const btn =
-        button === "left"
-          ? Button.LEFT
-          : button === "right"
-          ? Button.RIGHT
-          : Button.MIDDLE;
-      await mouse.click(btn);
-      return `Mouse ${button}-click at (${x}, ${y}) completed.`;
-    },
+    parameters: clickParameters,
+    execute: clickExecute,
+  });
+
+  server.addTool({
+    name: "click",
+    description: "Alias for mouseClick — simulate a mouse click at screen coordinates.",
+    parameters: clickParameters,
+    execute: clickExecute,
   });
 
   server.addTool({
