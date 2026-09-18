@@ -11,8 +11,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@vitest/coverage-v8": "^4.0.16",
-    "vitest": "^4.0.16"
+    "@vitest/coverage-v8": "^4.1.11",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "typescript": "^5.8.3"
