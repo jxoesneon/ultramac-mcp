@@ -118,7 +118,7 @@ describe('Verify Tools', () => {
         expect(result.element.role).toBe('AXButton');
         expect(result.element.position).toEqual([10, 20]);
         expect(result.element.size).toEqual([30, 12]);
-        expect(findElement).toHaveBeenCalledWith('OK', undefined, undefined);
+        expect(findElement).toHaveBeenCalledWith('OK', undefined, undefined, undefined);
     });
 
     it('assert_element_exists returns pass:false and forwards target when not found', async () => {
@@ -133,7 +133,7 @@ describe('Verify Tools', () => {
         }));
         expect(result.pass).toBe(false);
         expect(result.error).toBeTruthy();
-        expect(findElement).toHaveBeenCalledWith('Save', 'AXButton', { process: 'mart', pid: 42, window: 0 });
+        expect(findElement).toHaveBeenCalledWith('Save', 'AXButton', { process: 'mart', pid: 42, window: 0 }, undefined);
     });
 
     it('recent_process_logs builds a process == predicate for a named process', async () => {

@@ -6,7 +6,13 @@
  */
 
 import { runJXA } from './applescript-service';
-import { buildTargetPreamble, type UITarget } from './ui-service';
+import {
+    buildTargetPreamble,
+    DEFAULT_MAX_DEPTH,
+    DEFAULT_NODE_BUDGET,
+    type SearchLimits,
+    type UITarget,
+} from './ui-service';
 
 /**
  * Result of an element_contains_text tree assertion.
@@ -35,8 +41,11 @@ export async function elementContainsText(
     criteria: string,
     text: string,
     role?: string,
-    target?: UITarget
+    target?: UITarget,
+    limits?: SearchLimits
 ): Promise<ElementContainsTextResult> {
+    const maxDepth = limits?.maxDepth ?? DEFAULT_MAX_DEPTH;
+    const budget = limits?.budget ?? DEFAULT_NODE_BUDGET;
     const criteriaLit = JSON.stringify(criteria.toLowerCase());
     const textLit = JSON.stringify(text.toLowerCase());
     const roleLit = JSON.stringify(role || '');
@@ -48,28 +57,37 @@ export async function elementContainsText(
             JSON.stringify({error: "target_not_found", detail: "No process matched target " + JSON.stringify({process: __targetProc, pid: __targetPid})});
         } else {
         var parentElement = null;
+        var __visited = 0;
+        var __budget = ${JSON.stringify(budget)};
+        var __maxDepth = ${JSON.stringify(maxDepth)};
+        var __budgetExceeded = false;
 
-        function findParent(element) {
-            if (parentElement) return;
+        function findParent(element, depth) {
+            if (parentElement || __budgetExceeded) return;
+            if (depth > __maxDepth) return;
+            __visited += 1;
+            if (__visited > __budget) { __budgetExceeded = true; return; }
 
-            var name = "", desc = "", elRole = "", elTitle = "";
-            try { name = element.name() || ""; } catch(e) {}
-            try { desc = element.description() || ""; } catch(e) {}
+            var elRole = "";
             try { elRole = element.role() || ""; } catch(e) {}
-            try { elTitle = String(element.title() || ""); } catch(e) {}
+            var roleOk = (${roleLit} === "" || elRole === ${roleLit});
+            var name = "", desc = "", elTitle = "";
+            if (roleOk) {
+                try { name = element.name() || ""; } catch(e) {}
+                try { desc = element.description() || ""; } catch(e) {}
+                try { elTitle = String(element.title() || ""); } catch(e) {}
+            }
 
-            if (name.toLowerCase().includes(${criteriaLit}) || desc.toLowerCase().includes(${criteriaLit}) || elTitle.toLowerCase().includes(${criteriaLit})) {
-                if (${roleLit} === "" || elRole === ${roleLit}) {
-                    parentElement = element;
-                    return;
-                }
+            if (roleOk && (name.toLowerCase().includes(${criteriaLit}) || desc.toLowerCase().includes(${criteriaLit}) || elTitle.toLowerCase().includes(${criteriaLit}))) {
+                parentElement = element;
+                return;
             }
 
             try {
                 var children = element.uiElements();
                 for (var i = 0; i < children.length; i++) {
-                    findParent(children[i]);
-                    if (parentElement) return;
+                    findParent(children[i], depth + 1);
+                    if (parentElement || __budgetExceeded) return;
                 }
             } catch(e) {}
         }
@@ -79,18 +97,23 @@ export async function elementContainsText(
             JSON.stringify({error: "window_not_found", detail: "No window matched selector " + JSON.stringify(__targetWin)});
         } else {
         if (!root) root = process;
-        if (root) findParent(root);
-        if (!parentElement && root !== process && __targetWin === null) findParent(process);
+        if (root) findParent(root, 0);
+        if (!parentElement && !__budgetExceeded && root !== process && __targetWin === null) findParent(process, 0);
 
-        if (!parentElement) {
+        if (__budgetExceeded && !parentElement) {
+            JSON.stringify({found: false, error: "node budget exceeded", searched: __visited});
+        } else if (!parentElement) {
             JSON.stringify({found: false, error: "element_not_found", searched: 0});
         } else {
             var searched = 0;
             var matched = null;
 
-            function scan(element) {
-                if (matched !== null) return;
+            function scan(element, depth) {
+                if (matched !== null || __budgetExceeded) return;
+                if (depth > __maxDepth) return;
                 searched += 1;
+                __visited += 1;
+                if (__visited > __budget) { __budgetExceeded = true; return; }
 
                 var attrs = [];
                 var v;
@@ -108,12 +131,12 @@ export async function elementContainsText(
                 var children = [];
                 try { children = element.uiElements() || []; } catch(e) { children = []; }
                 for (var i = 0; i < children.length; i++) {
-                    scan(children[i]);
-                    if (matched !== null) return;
+                    scan(children[i], depth + 1);
+                    if (matched !== null || __budgetExceeded) return;
                 }
             }
 
-            scan(parentElement);
+            scan(parentElement, 0);
 
             if (matched !== null) {
                 JSON.stringify({found: true, matched: matched});
@@ -124,7 +147,12 @@ export async function elementContainsText(
         }
         }
     `;
-    const parsed = JSON.parse(runJXA(script));
+    let parsed: any;
+    try {
+        parsed = JSON.parse(await runJXA(script, { timeoutMs: limits?.timeoutMs }));
+    } catch (err: any) {
+        return { found: false, error: err?.message ?? String(err) };
+    }
     if (parsed && parsed.error) {
         return { found: false, error: parsed.detail || parsed.error };
     }

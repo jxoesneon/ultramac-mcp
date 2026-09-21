@@ -230,7 +230,7 @@ describe('Screen Tools', () => {
         screenTools.registerScreenTools(mockServer as unknown as MCPServer);
         const tool = registeredTools.get('get_ui_tree');
         const result = JSON.parse(await tool.execute({ depth: 3 }));
-        expect(getUITree).toHaveBeenCalledWith(3, undefined);
+        expect(getUITree).toHaveBeenCalledWith(3, undefined, undefined);
         expect(result).toEqual({ role: 'AXWindow' });
     });
 
@@ -242,7 +242,7 @@ describe('Screen Tools', () => {
             process: 'Finder',
             pid: 10,
             window: 'Documents',
-        });
+        }, undefined);
     });
 
     it('find_element reports found element with center coordinates', async () => {
@@ -256,7 +256,7 @@ describe('Screen Tools', () => {
         });
         const tool = registeredTools.get('find_element');
         const result = await tool.execute({ criteria: 'ok', role: 'AXButton' });
-        expect(findElement).toHaveBeenCalledWith('ok', 'AXButton', undefined);
+        expect(findElement).toHaveBeenCalledWith('ok', 'AXButton', undefined, undefined);
         expect(result).toBe("Found 'OK' (AXButton) at (100, 200). Center: (125, 210)");
     });
 
@@ -283,7 +283,7 @@ describe('Screen Tools', () => {
             process: 'Safari',
             pid: undefined,
             window: 1,
-        });
+        }, undefined);
     });
 
     it('find_text_on_screen returns OCR result as JSON', async () => {
@@ -326,7 +326,7 @@ describe('Screen Tools', () => {
         const tool = registeredTools.get('wait_for_ui_element');
         const result = await tool.execute({ criteria: 'Slow', role: 'AXButton', timeoutMs: 600 });
         expect(result).toBe('Timeout waiting for element "Slow"');
-        expect(findElement).toHaveBeenCalledWith('Slow', 'AXButton', undefined);
+        expect(findElement).toHaveBeenCalledWith('Slow', 'AXButton', undefined, undefined);
     }, 10000);
 
     it('wait_for_ui_element forwards target params', async () => {
@@ -338,6 +338,6 @@ describe('Screen Tools', () => {
             process: undefined,
             pid: 42,
             window: undefined,
-        });
+        }, undefined);
     });
 });

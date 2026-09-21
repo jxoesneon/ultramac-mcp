@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { runJXA } from './applescript-service';
+import { runJXA, runJXASync } from './applescript-service';
 
 /**
  * UI Element properties
@@ -31,6 +31,19 @@ export interface UITarget {
     /** Window selector: number = window index, string = case-insensitive substring of window title. Default: first window. */
     window?: string | number;
 }
+
+/** Bounds for an AX-tree walk so a huge/wedged tree can't run forever. */
+export interface SearchLimits {
+    /** Max recursion depth into uiElements() (default 8). */
+    maxDepth?: number;
+    /** Max nodes visited before the walk gives up (default 1500). */
+    budget?: number;
+    /** Wall-clock timeout for the underlying osascript run, in ms. */
+    timeoutMs?: number;
+}
+
+export const DEFAULT_MAX_DEPTH = 8;
+export const DEFAULT_NODE_BUDGET = 1500;
 
 /**
  * Build the JXA preamble that resolves a UITarget into a process + window.
@@ -93,7 +106,10 @@ export function buildTargetPreamble(target?: UITarget): string {
 /**
  * Get the UI tree of the frontmost window (or of a targeted process/window)
  */
-export async function getUITree(depth: number = 2, target?: UITarget): Promise<UIElement> {
+export async function getUITree(depth: number = 2, target?: UITarget, limits?: SearchLimits): Promise<UIElement> {
+    const maxDepth = limits?.maxDepth ?? DEFAULT_MAX_DEPTH;
+    const effDepth = Math.min(depth, maxDepth);
+    const budget = limits?.budget ?? DEFAULT_NODE_BUDGET;
     const script = `
         var system = Application('System Events');
         ${buildTargetPreamble(target)}
@@ -102,8 +118,14 @@ export async function getUITree(depth: number = 2, target?: UITarget): Promise<U
             JSON.stringify({error: "target_not_found", detail: "No process matched target " + JSON.stringify({process: __targetProc, pid: __targetPid})});
         } else {
 
+        var __visited = 0;
+        var __budget = ${JSON.stringify(budget)};
+        var __budgetExceeded = false;
+
         function getProps(element, currentDepth, maxDepth) {
             if (currentDepth > maxDepth) return null;
+            if (__visited > __budget) { __budgetExceeded = true; return null; }
+            __visited += 1;
 
             var result = { role: "", name: "", description: "", position: [0, 0], size: [0, 0] };
             try { result.role = element.role(); } catch(e) {}
@@ -118,6 +140,7 @@ export async function getUITree(depth: number = 2, target?: UITarget): Promise<U
                     if (children && children.length > 0) {
                         result.children = [];
                         for (var i = 0; i < children.length; i++) {
+                            if (__budgetExceeded) break;
                             var childSub = getProps(children[i], currentDepth + 1, maxDepth);
                             if (childSub) result.children.push(childSub);
                         }
@@ -132,11 +155,13 @@ export async function getUITree(depth: number = 2, target?: UITarget): Promise<U
             JSON.stringify({error: "window_not_found", detail: "No window matched selector " + JSON.stringify(__targetWin)});
         } else {
             if (!root) root = process;
-            JSON.stringify(getProps(root, 0, ${JSON.stringify(depth)}));
+            var tree = getProps(root, 0, ${JSON.stringify(effDepth)});
+            if (tree && __budgetExceeded) tree.truncated = true;
+            JSON.stringify(tree);
         }
         }
     `;
-    const parsed = JSON.parse(runJXA(script));
+    const parsed = JSON.parse(await runJXA(script, { timeoutMs: limits?.timeoutMs }));
     if (parsed && parsed.error) {
         throw new Error(parsed.detail || parsed.error);
     }
@@ -146,9 +171,11 @@ export async function getUITree(depth: number = 2, target?: UITarget): Promise<U
 /**
  * Find an element by criteria
  */
-export async function findElement(criteria: string, role?: string, target?: UITarget): Promise<any> {
+export async function findElement(criteria: string, role?: string, target?: UITarget, limits?: SearchLimits): Promise<any> {
     const criteriaLit = JSON.stringify(criteria.toLowerCase());
     const roleLit = JSON.stringify(role || '');
+    const maxDepth = limits?.maxDepth ?? DEFAULT_MAX_DEPTH;
+    const budget = limits?.budget ?? DEFAULT_NODE_BUDGET;
     const script = `
         var system = Application('System Events');
         ${buildTargetPreamble(target)}
@@ -157,28 +184,40 @@ export async function findElement(criteria: string, role?: string, target?: UITa
             JSON.stringify({error: "target_not_found", detail: "No process matched target " + JSON.stringify({process: __targetProc, pid: __targetPid})});
         } else {
         var foundElement = null;
+        var __visited = 0;
+        var __budget = ${JSON.stringify(budget)};
+        var __maxDepth = ${JSON.stringify(maxDepth)};
+        var __budgetExceeded = false;
 
-        function search(element) {
-            if (foundElement) return;
+        function search(element, depth) {
+            if (foundElement || __budgetExceeded) return;
+            if (depth > __maxDepth) return;
+            __visited += 1;
+            if (__visited > __budget) { __budgetExceeded = true; return; }
 
-            var name = "", desc = "", elRole = "", elTitle = "";
-            try { name = element.name() || ""; } catch(e) {}
-            try { desc = element.description() || ""; } catch(e) {}
+            // role() is the cheapest discriminator — read it first and,
+            // when a role filter is given and doesn't match, skip the
+            // name/description/title reads (still descend to children).
+            var elRole = "";
             try { elRole = element.role() || ""; } catch(e) {}
-            try { elTitle = String(element.title() || ""); } catch(e) {}
+            var roleOk = (${roleLit} === "" || elRole === ${roleLit});
+            var name = "", desc = "", elTitle = "";
+            if (roleOk) {
+                try { name = element.name() || ""; } catch(e) {}
+                try { desc = element.description() || ""; } catch(e) {}
+                try { elTitle = String(element.title() || ""); } catch(e) {}
+            }
 
-            if (name.toLowerCase().includes(${criteriaLit}) || desc.toLowerCase().includes(${criteriaLit}) || elTitle.toLowerCase().includes(${criteriaLit})) {
-                if (${roleLit} === "" || elRole === ${roleLit}) {
-                    foundElement = element;
-                    return;
-                }
+            if (roleOk && (name.toLowerCase().includes(${criteriaLit}) || desc.toLowerCase().includes(${criteriaLit}) || elTitle.toLowerCase().includes(${criteriaLit}))) {
+                foundElement = element;
+                return;
             }
 
             try {
                 var children = element.uiElements();
                 for (var i = 0; i < children.length; i++) {
-                    search(children[i]);
-                    if (foundElement) return;
+                    search(children[i], depth + 1);
+                    if (foundElement || __budgetExceeded) return;
                 }
             } catch(e) {}
         }
@@ -188,8 +227,8 @@ export async function findElement(criteria: string, role?: string, target?: UITa
             JSON.stringify({error: "window_not_found", detail: "No window matched selector " + JSON.stringify(__targetWin)});
         } else {
         if (!root) root = process;
-        if (root) search(root);
-        if (!foundElement && root !== process && __targetWin === null) search(process);
+        if (root) search(root, 0);
+        if (!foundElement && !__budgetExceeded && root !== process && __targetWin === null) search(process, 0);
 
         if (foundElement) {
             var elDesc, elValue;
@@ -197,6 +236,7 @@ export async function findElement(criteria: string, role?: string, target?: UITa
             try { elValue = foundElement.value(); } catch(e) { elValue = undefined; }
             JSON.stringify({
                 found: true,
+                visited: __visited,
                 position: foundElement.position(),
                 size: foundElement.size(),
                 name: foundElement.name(),
@@ -204,15 +244,22 @@ export async function findElement(criteria: string, role?: string, target?: UITa
                 description: elDesc,
                 value: elValue
             });
+        } else if (__budgetExceeded) {
+            JSON.stringify({ found: false, error: "node budget exceeded", visited: __visited });
         } else {
-            JSON.stringify({ found: false });
+            JSON.stringify({ found: false, visited: __visited });
         }
         }
         }
     `;
-    const parsed = JSON.parse(runJXA(script));
+    let parsed: any;
+    try {
+        parsed = JSON.parse(await runJXA(script, { timeoutMs: limits?.timeoutMs }));
+    } catch (err: any) {
+        return { found: false, error: err?.message ?? String(err) };
+    }
     if (parsed && parsed.error) {
-        return { found: false, error: parsed.detail || parsed.error };
+        return { found: false, error: parsed.detail || parsed.error, visited: parsed.visited };
     }
     return parsed;
 }
@@ -230,7 +277,7 @@ export function getActiveWindowInfo(): { title: string; bundleId: string } | nul
                 bundleId: proc.bundleIdentifier()
             });
         `;
-        return JSON.parse(runJXA(script));
+        return JSON.parse(runJXASync(script));
     } catch(e) {
         return null;
     }
@@ -278,7 +325,7 @@ export async function scanAppMenus(appName?: string): Promise<any> {
         }
         JSON.stringify(result);
     `;
-    return JSON.parse(runJXA(script));
+    return JSON.parse(await runJXA(script));
 }
 
 /**
@@ -313,6 +360,6 @@ export async function triggerMenuCommand(menuPath: string, appName?: string): Pr
         }
         clickMenuRecursive(menuBar, pathParts);
     `;
-    runJXA(script);
+    await runJXA(script);
     return true;
 }

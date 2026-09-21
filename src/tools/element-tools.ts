@@ -9,7 +9,7 @@ import { z } from "zod";
 import { openWindows } from "get-windows";
 import { MCPServer } from "../server/mcp-server";
 import { getNutjs, requireNutjs } from "../server/nutjs-integration";
-import { findElement, type UITarget } from "../services/ui-service";
+import { findElement, type SearchLimits, type UITarget } from "../services/ui-service";
 
 /**
  * Shared target-selector parameters (process / pid / window) used by the
@@ -29,6 +29,41 @@ const targetParams = {
     .optional()
     .describe("Target window: number = window index, string = case-insensitive title substring."),
 };
+
+/**
+ * Shared AX-tree search bounds — cap the find walk so a huge or wedged
+ * tree returns promptly instead of hanging the server.
+ */
+const searchLimitParams = {
+  maxDepth: z
+    .number()
+    .int()
+    .min(1)
+    .max(12)
+    .optional()
+    .describe("Max AX-tree depth to search (default 8)."),
+  budget: z
+    .number()
+    .int()
+    .min(50)
+    .max(20000)
+    .optional()
+    .describe("Max nodes visited before giving up (default 1500)."),
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1000)
+    .max(120000)
+    .optional()
+    .describe("Wall-clock limit for the accessibility query, in ms (default 15000)."),
+};
+
+function toLimits(args: { maxDepth?: number; budget?: number; timeoutMs?: number }): SearchLimits | undefined {
+  if (args.maxDepth === undefined && args.budget === undefined && args.timeoutMs === undefined) {
+    return undefined;
+  }
+  return { maxDepth: args.maxDepth, budget: args.budget, timeoutMs: args.timeoutMs };
+}
 
 const buttonParam = z
   .enum(["left", "right", "middle"])
@@ -84,17 +119,21 @@ export function registerElementTools(server: MCPServer) {
         .optional()
         .describe("Optional accessibility role to match (e.g. 'AXButton', 'AXTextField')."),
       ...targetParams,
+      ...searchLimitParams,
       button: buttonParam,
     }),
-    execute: async ({ criteria, role, process, pid, window, button = "left" }: {
+    execute: async ({ criteria, role, process, pid, window, maxDepth, budget, timeoutMs, button = "left" }: {
       criteria: string;
       role?: string;
       process?: string;
       pid?: number;
       window?: string | number;
+      maxDepth?: number;
+      budget?: number;
+      timeoutMs?: number;
       button: string;
     }) => {
-      const data = await findElement(criteria, role, buildTarget(process, pid, window));
+      const data = await findElement(criteria, role, buildTarget(process, pid, window), toLimits({ maxDepth, budget, timeoutMs }));
       if (!data.found) {
         return `Element not found: ${criteria}${data.error ? ` (${data.error})` : ""}`;
       }
@@ -122,16 +161,20 @@ export function registerElementTools(server: MCPServer) {
         .describe("Optional accessibility role to match (e.g. 'AXTextField')."),
       text: z.string().describe("Literal text to type into the element."),
       ...targetParams,
+      ...searchLimitParams,
     }),
-    execute: async ({ criteria, role, text, process, pid, window }: {
+    execute: async ({ criteria, role, text, process, pid, window, maxDepth, budget, timeoutMs }: {
       criteria: string;
       role?: string;
       text: string;
       process?: string;
       pid?: number;
       window?: string | number;
+      maxDepth?: number;
+      budget?: number;
+      timeoutMs?: number;
     }) => {
-      const data = await findElement(criteria, role, buildTarget(process, pid, window));
+      const data = await findElement(criteria, role, buildTarget(process, pid, window), toLimits({ maxDepth, budget, timeoutMs }));
       if (!data.found) {
         return `Element not found: ${criteria}${data.error ? ` (${data.error})` : ""}`;
       }

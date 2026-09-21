@@ -11,7 +11,7 @@ import { MCPServer } from "../server/mcp-server";
 import { getNutjs, requireNutjs } from "../server/nutjs-integration";
 import { getScreenDimensions, captureScreenshot } from "../services/screen-service";
 import { setSpatialFocus } from "../services/spatial-context";
-import { getUITree, findElement, type UITarget } from "../services/ui-service";
+import { getUITree, findElement, type SearchLimits, type UITarget } from "../services/ui-service";
 import { performOCR } from "../services/ocr-service";
 import { findIcon } from "../services/vision-service";
 
@@ -24,6 +24,26 @@ const targetFields = {
 function toTarget(args: { process?: string; pid?: number; window?: string | number }): UITarget | undefined {
     if (args.process === undefined && args.pid === undefined && args.window === undefined) return undefined;
     return { process: args.process, pid: args.pid, window: args.window };
+}
+
+/** Bounds for the AX-tree walk so a huge/wedged tree returns promptly. */
+const searchLimitFields = {
+    maxDepth: z.number().int().min(1).max(12).optional().describe("Max AX-tree depth to search (default 8)."),
+    budget: z.number().int().min(50).max(20000).optional().describe("Max nodes visited before giving up (default 1500)."),
+    timeoutMs: z.number().int().min(1000).max(120000).optional().describe("Wall-clock limit for the accessibility query, in ms (default 15000)."),
+};
+
+/** wait_for_ui_element already uses `timeoutMs` for the poll budget, so
+ * its per-query AX limit is named `queryTimeoutMs`. */
+const waitLimitFields = {
+    maxDepth: searchLimitFields.maxDepth,
+    budget: searchLimitFields.budget,
+    queryTimeoutMs: z.number().int().min(1000).max(120000).optional().describe("Wall-clock limit for each accessibility query, in ms (default 15000)."),
+};
+
+function toLimits(args: { maxDepth?: number; budget?: number; timeoutMs?: number }): SearchLimits | undefined {
+    if (args.maxDepth === undefined && args.budget === undefined && args.timeoutMs === undefined) return undefined;
+    return { maxDepth: args.maxDepth, budget: args.budget, timeoutMs: args.timeoutMs };
 }
 
 /**
@@ -122,9 +142,10 @@ export function registerScreenTools(server: MCPServer) {
     parameters: z.object({
        depth: z.number().optional().default(2),
        ...targetFields,
+       ...searchLimitFields,
     }),
-    execute: async (args: {depth: number, process?: string, pid?: number, window?: string | number}) => {
-      const result = await getUITree(args.depth, toTarget(args));
+    execute: async (args: {depth: number, process?: string, pid?: number, window?: string | number, maxDepth?: number, budget?: number, timeoutMs?: number}) => {
+      const result = await getUITree(args.depth, toTarget(args), toLimits(args));
       return JSON.stringify(result, null, 2);
     }
   });
@@ -136,9 +157,10 @@ export function registerScreenTools(server: MCPServer) {
       criteria: z.string(),
       role: z.string().optional(),
       ...targetFields,
+      ...searchLimitFields,
     }),
-    execute: async (args: {criteria: string, role?: string, process?: string, pid?: number, window?: string | number}) => {
-        const data = await findElement(args.criteria, args.role, toTarget(args));
+    execute: async (args: {criteria: string, role?: string, process?: string, pid?: number, window?: string | number, maxDepth?: number, budget?: number, timeoutMs?: number}) => {
+        const data = await findElement(args.criteria, args.role, toTarget(args), toLimits(args));
         if (data.found) {
             const centerX = data.position[0] + (data.size[0] / 2);
             const centerY = data.position[1] + (data.size[1] / 2);
@@ -180,11 +202,12 @@ export function registerScreenTools(server: MCPServer) {
       role: z.string().optional(),
       timeoutMs: z.number().optional().default(10000),
       ...targetFields,
+      ...waitLimitFields,
     }),
-    execute: async (args: {criteria: string, role?: string, timeoutMs: number, process?: string, pid?: number, window?: string | number}) => {
+    execute: async (args: {criteria: string, role?: string, timeoutMs: number, process?: string, pid?: number, window?: string | number, maxDepth?: number, budget?: number, queryTimeoutMs?: number}) => {
         const startTime = Date.now();
         while (Date.now() - startTime < args.timeoutMs!) {
-            const data = await findElement(args.criteria, args.role, toTarget(args));
+            const data = await findElement(args.criteria, args.role, toTarget(args), toLimits({ maxDepth: args.maxDepth, budget: args.budget, timeoutMs: args.queryTimeoutMs }));
             if (data.found) return `Element "${args.criteria}" found!`;
             if (data.error) return `Element not found: ${data.error}`;
             await new Promise(r => setTimeout(r, 500));
