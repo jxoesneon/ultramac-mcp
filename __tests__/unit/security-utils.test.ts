@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { encrypt, decrypt, sanitizeShellArg, isAlphanumericSafe, RateLimiter, sanitizeFilePath, sanitizeIdentifier, safeExecSync } from '../../src/core/security-utils';
 import { execSync } from 'child_process';
 
+vi.mock('child_process', () => {
+    const execSync = vi.fn();
+    return {
+        default: { execSync },
+        execSync,
+    };
+});
+
 describe('Security Utils', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,15 +85,6 @@ describe('Security Utils', () => {
       expect(() => sanitizeIdentifier(longId)).toThrow(/too long/);
     });
   });
-
-// Mock child_process at top level
-vi.mock('child_process', () => {
-    const execSync = vi.fn();
-    return {
-        default: { execSync },
-        execSync,
-    };
-});
 
 describe('Safe Command Execution (safeExecSync)', () => {
     it('should execute allowed commands', () => {
