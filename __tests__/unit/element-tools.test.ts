@@ -104,7 +104,7 @@ describe('Element Tools', () => {
             process: 'Safari',
             pid: 42,
             window: 'Main',
-        });
+        }, undefined);
         expect(mockSetPosition).toHaveBeenCalledWith(
             expect.objectContaining({ x: 110, y: 205 })
         );
@@ -123,7 +123,7 @@ describe('Element Tools', () => {
         elementTools.registerElementTools(mockServer as unknown as MCPServer);
         const tool = registeredTools.get('click_element');
         await tool.execute({ criteria: 'OK', button: 'left' });
-        expect(mockFindElement).toHaveBeenCalledWith('OK', undefined, undefined);
+        expect(mockFindElement).toHaveBeenCalledWith('OK', undefined, undefined, undefined);
     });
 
     it('click_element returns a not-found message without clicking', async () => {

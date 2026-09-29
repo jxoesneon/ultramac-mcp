@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../src/services/applescript-service', () => ({
     runJXA: vi.fn(() => '{"found":false}'),
+    runJXASync: vi.fn(() => '{"found":false}'),
     runAS: vi.fn(),
 }));
 
-import { runJXA } from '../../src/services/applescript-service';
+import { runJXA, runJXASync } from '../../src/services/applescript-service';
 import {
     buildTargetPreamble,
     findElement,
@@ -88,6 +89,59 @@ describe('UI Service — findElement targeting', () => {
     });
 });
 
+describe('UI Service — search limits', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (runJXA as any).mockReturnValue('{"found":false}');
+    });
+
+    it('embeds default maxDepth and node budget in the find script', async () => {
+        await findElement('OK');
+        const script = lastScript();
+        expect(script).toContain('__maxDepth = 8');
+        expect(script).toContain('__budget = 1500');
+        expect(script).toContain('budgetExceeded');
+    });
+
+    it('embeds caller-supplied limits', async () => {
+        await findElement('OK', undefined, undefined, { maxDepth: 4, budget: 200, timeoutMs: 5000 });
+        const script = lastScript();
+        expect(script).toContain('__maxDepth = 4');
+        expect(script).toContain('__budget = 200');
+        expect(runJXA).toHaveBeenCalledWith(expect.any(String), { timeoutMs: 5000 });
+    });
+
+    it('reads role() before name() in the generated script', async () => {
+        await findElement('OK', 'AXButton');
+        const script = lastScript();
+        expect(script.indexOf('element.role()')).toBeLessThan(script.indexOf('element.name()'));
+    });
+
+    it('embeds the budget in the getUITree script and clamps depth', async () => {
+        (runJXA as any).mockReturnValue('{"role":"AXWindow","name":"","description":"","position":[0,0],"size":[0,0]}');
+        await getUITree(20, undefined, { maxDepth: 6, budget: 500 });
+        const script = lastScript();
+        expect(script).toContain('__budget = 500');
+        expect(script).toContain('getProps(root, 0, 6)');
+        expect(script).toContain('truncated');
+    });
+
+    it('passes a node-budget-exceeded result through', async () => {
+        (runJXA as any).mockReturnValue('{"found":false,"error":"node budget exceeded","visited":1500}');
+        const result = await findElement('OK');
+        expect(result.found).toBe(false);
+        expect(result.error).toBe('node budget exceeded');
+        expect(result.visited).toBe(1500);
+    });
+
+    it('returns {found:false, error} instead of throwing when runJXA rejects (timeout)', async () => {
+        (runJXA as any).mockRejectedValue(new Error('JXA script timed out after 15000ms'));
+        const result = await findElement('OK');
+        expect(result.found).toBe(false);
+        expect(result.error).toBe('JXA script timed out after 15000ms');
+    });
+});
+
 describe('UI Service — getUITree targeting', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -156,19 +210,19 @@ describe('UI Service — getActiveWindowInfo', () => {
     });
 
     it('returns parsed title and bundleId from JXA output', () => {
-        (runJXA as any).mockReturnValue('{"title":"Editor","bundleId":"com.example.app"}');
+        (runJXASync as any).mockReturnValue('{"title":"Editor","bundleId":"com.example.app"}');
         const info = getActiveWindowInfo();
         expect(info).toEqual({ title: 'Editor', bundleId: 'com.example.app' });
-        expect(lastScript()).toContain('frontmost');
+        expect((runJXASync as any).mock.calls.at(-1)[0]).toContain('frontmost');
     });
 
-    it('returns null when runJXA throws', () => {
-        (runJXA as any).mockImplementation(() => { throw new Error('JXA failed'); });
+    it('returns null when runJXASync throws', () => {
+        (runJXASync as any).mockImplementation(() => { throw new Error('JXA failed'); });
         expect(getActiveWindowInfo()).toBeNull();
     });
 
     it('returns null when the JXA output is not valid JSON', () => {
-        (runJXA as any).mockReturnValue('not json');
+        (runJXASync as any).mockReturnValue('not json');
         expect(getActiveWindowInfo()).toBeNull();
     });
 });

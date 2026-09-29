@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import childProcess from 'node:child_process';
-import { runAS, runJXA } from '../../src/services/applescript-service';
+import { runAS, runJXA, runJXASync, DEFAULT_JXA_TIMEOUT_MS } from '../../src/services/applescript-service';
 
 const mockRunAppleScript = vi.hoisted(() => vi.fn());
 
@@ -31,27 +31,75 @@ describe('AppleScript Service', () => {
     });
 
     describe('runJXA', () => {
-        it('passes the script to osascript via stdin and trims output', () => {
-            const spy = vi.spyOn(childProcess, 'execFileSync').mockReturnValue('  result  ' as any);
-            const result = runJXA('Application("Finder").name()');
+        const fakeChild = () => ({ stdin: { end: vi.fn() } });
+
+        const mockExecFile = (impl: (cb: any) => void) =>
+            vi.spyOn(childProcess, 'execFile').mockImplementation(((_f: any, _a: any, _o: any, cb: any) => {
+                impl(cb);
+                return fakeChild();
+            }) as any);
+
+        it('passes the script to osascript via stdin and trims output', async () => {
+            const spy = mockExecFile((cb) => cb(null, '  result  ', ''));
+            const result = await runJXA('Application("Finder").name()');
             expect(spy).toHaveBeenCalledTimes(1);
-            expect(spy).toHaveBeenCalledWith('osascript', ['-l', 'JavaScript'], {
-                input: 'Application("Finder").name()',
-                encoding: 'utf8'
-            });
+            const [file, args, opts] = spy.mock.calls[0] as any[];
+            expect(file).toBe('osascript');
+            expect(args).toEqual(['-l', 'JavaScript']);
+            expect(opts.encoding).toBe('utf8');
+            expect(opts.timeout).toBe(DEFAULT_JXA_TIMEOUT_MS);
+            expect(opts.killSignal).toBe('SIGKILL');
+            expect(opts.maxBuffer).toBe(16 * 1024 * 1024);
             expect(result).toBe('result');
         });
 
-        it('returns empty string when osascript outputs only whitespace', () => {
-            vi.spyOn(childProcess, 'execFileSync').mockReturnValue('   \n' as any);
-            expect(runJXA('""')).toBe('');
+        it('honours a custom timeoutMs', async () => {
+            const spy = mockExecFile((cb) => cb(null, 'ok', ''));
+            await runJXA('1', { timeoutMs: 5000 });
+            expect((spy.mock.calls[0] as any[])[2].timeout).toBe(5000);
         });
 
-        it('propagates osascript errors', () => {
+        it('writes the script to child stdin', async () => {
+            const child = fakeChild();
+            vi.spyOn(childProcess, 'execFile').mockImplementation(((_f: any, _a: any, _o: any, cb: any) => {
+                cb(null, 'ok', '');
+                return child;
+            }) as any);
+            await runJXA('my script');
+            expect(child.stdin.end).toHaveBeenCalledWith('my script');
+        });
+
+        it('maps a killed (timeout) error to a timed-out message', async () => {
+            mockExecFile((cb) => cb(Object.assign(new Error('killed'), { killed: true, signal: 'SIGKILL' }), '', ''));
+            await expect(runJXA('loop forever', { timeoutMs: 3000 })).rejects.toThrow(
+                'JXA script timed out after 3000ms'
+            );
+        });
+
+        it('propagates non-timeout osascript errors', async () => {
+            mockExecFile((cb) => cb(new Error('jxa failed'), '', ''));
+            await expect(runJXA('throw 1')).rejects.toThrow('jxa failed');
+        });
+    });
+
+    describe('runJXASync', () => {
+        it('passes the script to osascript via stdin and trims output', () => {
+            const spy = vi.spyOn(childProcess, 'execFileSync').mockReturnValue('  result  ' as any);
+            const result = runJXASync('Application("Finder").name()');
+            expect(spy).toHaveBeenCalledTimes(1);
+            const opts = (spy.mock.calls[0] as any[])[2] as any;
+            expect(opts.input).toBe('Application("Finder").name()');
+            expect(opts.encoding).toBe('utf8');
+            expect(opts.timeout).toBe(DEFAULT_JXA_TIMEOUT_MS);
+            expect(opts.killSignal).toBe('SIGKILL');
+            expect(result).toBe('result');
+        });
+
+        it('maps a killed (timeout) error to a timed-out message', () => {
             vi.spyOn(childProcess, 'execFileSync').mockImplementation(() => {
-                throw new Error('jxa failed');
+                throw Object.assign(new Error('killed'), { killed: true, signal: 'SIGKILL' });
             });
-            expect(() => runJXA('throw 1')).toThrow('jxa failed');
+            expect(() => runJXASync('x', { timeoutMs: 2000 })).toThrow('JXA script timed out after 2000ms');
         });
     });
 });

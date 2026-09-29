@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { execFileSync } from "child_process";
 import { MCPServer } from "../server/mcp-server";
-import { findElement, type UITarget } from "../services/ui-service";
+import { findElement, type SearchLimits, type UITarget } from "../services/ui-service";
 import { elementContainsText } from "../services/verify-service";
 
 const targetFields = {
@@ -20,6 +20,18 @@ const targetFields = {
 function toTarget(args: { process?: string; pid?: number; window?: string | number }): UITarget | undefined {
     if (args.process === undefined && args.pid === undefined && args.window === undefined) return undefined;
     return { process: args.process, pid: args.pid, window: args.window };
+}
+
+/** Bounds for the AX-tree walk so a huge/wedged tree returns promptly. */
+const searchLimitFields = {
+    maxDepth: z.number().int().min(1).max(12).optional().describe("Max AX-tree depth to search (default 8)."),
+    budget: z.number().int().min(50).max(20000).optional().describe("Max nodes visited before giving up (default 1500)."),
+    timeoutMs: z.number().int().min(1000).max(120000).optional().describe("Wall-clock limit for the accessibility query, in ms (default 15000)."),
+};
+
+function toLimits(args: { maxDepth?: number; budget?: number; timeoutMs?: number }): SearchLimits | undefined {
+    if (args.maxDepth === undefined && args.budget === undefined && args.timeoutMs === undefined) return undefined;
+    return { maxDepth: args.maxDepth, budget: args.budget, timeoutMs: args.timeoutMs };
 }
 
 /**
@@ -36,10 +48,11 @@ export function registerVerifyTools(server: MCPServer) {
             text: z.string().describe("Text to search for inside the parent element's subtree (case-insensitive)."),
             role: z.string().optional().describe("Optional exact AX role the parent element must have (e.g. AXButton)."),
             ...targetFields,
+            ...searchLimitFields,
         }),
-        execute: async ({ criteria, text, role, process, pid, window }: { criteria: string; text: string; role?: string; process?: string; pid?: number; window?: string | number }) => {
+        execute: async ({ criteria, text, role, process, pid, window, maxDepth, budget, timeoutMs }: { criteria: string; text: string; role?: string; process?: string; pid?: number; window?: string | number; maxDepth?: number; budget?: number; timeoutMs?: number }) => {
             const target = toTarget({ process, pid, window });
-            const result = await elementContainsText(criteria, text, role, target);
+            const result = await elementContainsText(criteria, text, role, target, toLimits({ maxDepth, budget, timeoutMs }));
             const json = JSON.stringify(result);
             if (result.error) {
                 return `FAIL: element_contains_text could not be evaluated (${result.error})\n${json}`;
@@ -58,9 +71,10 @@ export function registerVerifyTools(server: MCPServer) {
             criteria: z.string().describe("Substring to match the element's name or description (case-insensitive)."),
             role: z.string().optional().describe("Optional exact AX role (e.g. AXButton)."),
             ...targetFields,
+            ...searchLimitFields,
         }),
-        execute: async ({ criteria, role, process, pid, window }: { criteria: string; role?: string; process?: string; pid?: number; window?: string | number }) => {
-            const data = await findElement(criteria, role, toTarget({ process, pid, window }));
+        execute: async ({ criteria, role, process, pid, window, maxDepth, budget, timeoutMs }: { criteria: string; role?: string; process?: string; pid?: number; window?: string | number; maxDepth?: number; budget?: number; timeoutMs?: number }) => {
+            const data = await findElement(criteria, role, toTarget({ process, pid, window }), toLimits({ maxDepth, budget, timeoutMs }));
             if (data && data.found) {
                 return JSON.stringify({
                     pass: true,

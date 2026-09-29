@@ -1,7 +1,8 @@
 version: 2
 updates:
-  # Enable version updates for npm
-  - package-ecosystem: "npm"
+  # Bun is the canonical package manager (bun.lock); CI runs
+  # `bun install --frozen-lockfile`, so Dependabot must update bun.lock.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -16,7 +17,7 @@ updates:
         update-types:
           - "minor"
           - "patch"
-production-dependencies:
+      production-dependencies:
         dependency-type: "production"
     # Security updates take priority
     labels:
@@ -30,5 +31,3 @@ production-dependencies:
       include: "scope"
     reviewers:
       - "jxoesneon"
-    # Allow Dependabot to update package-lock.json
-    versioning-strategy: increase
