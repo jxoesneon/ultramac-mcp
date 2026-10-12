@@ -9,10 +9,12 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 import Tesseract from "tesseract.js";
+import sharp from 'sharp';
 import { safeExecSync } from '../core/security-utils';
 import { OCRCache } from '../core/ocr-cache';
 import { getSpatialFocus, type Region } from './spatial-context';
 import { auditLogger } from '../core/audit-logger';
+import { detectPixelRatio } from './display-scale';
 
 const ocrCache = new OCRCache();
 
@@ -51,16 +53,24 @@ export async function performOCR(searchText: string, region: Region | null = nul
         return { found: false, debugInfo: { error: "Empty screenshot" } };
     }
 
+    // OCR bounding boxes are in image pixels; convert to screen points so
+    // results can feed directly into click coordinates.
+    const meta = await sharp(screenshotPath).metadata();
+    const imgWidth = meta.width ?? 0;
+    const scale = region
+        ? (region.w > 0 ? imgWidth / region.w : 1)
+        : await detectPixelRatio(imgWidth);
+
     try {
         const result = await Tesseract.recognize(screenshotPath, 'eng');
         const data = result.data as any;
-        
+
         let allWords: any[] = [];
         const addOffset = (bbox: any) => ({
-            x0: bbox.x0 + regionOffset.x,
-            y0: bbox.y0 + regionOffset.y,
-            x1: bbox.x1 + regionOffset.x,
-            y1: bbox.y1 + regionOffset.y,
+            x0: bbox.x0 / scale + regionOffset.x,
+            y0: bbox.y0 / scale + regionOffset.y,
+            x1: bbox.x1 / scale + regionOffset.x,
+            y1: bbox.y1 / scale + regionOffset.y,
         });
         
         // Traverse result data

@@ -13,6 +13,7 @@ import { pipeline, RawImage } from '@xenova/transformers';
 import { safeExecSync } from '../core/security-utils';
 import { getSpatialFocus } from './spatial-context';
 import { auditLogger } from '../core/audit-logger';
+import { detectPixelRatio } from './display-scale';
 
 let objectDetector: any = null;
 
@@ -38,7 +39,7 @@ export async function findIcon(description: string, saveDebugImage: boolean = fa
     let offset = { x: 0, y: 0 };
     
     if (activeRegion) {
-        regionCmd = `-R ${activeRegion.x},${activeRegion.y},${activeRegion.w},${activeRegion.h}`;
+        regionCmd = `-R${activeRegion.x},${activeRegion.y},${activeRegion.w},${activeRegion.h}`;
         offset = { x: activeRegion.x, y: activeRegion.y };
     }
     
@@ -67,11 +68,16 @@ export async function findIcon(description: string, saveDebugImage: boolean = fa
              return { found: false, message: `Icon "${description}" found but with low confidence (${Math.round(topMatch.score*100)}%).` };
         }
         
+        // Detector boxes are in image pixels; convert to screen points so
+        // results can feed directly into click coordinates.
+        const scale = activeRegion
+            ? imageInfo.info.width / activeRegion.w
+            : await detectPixelRatio(imageInfo.info.width);
         const box = topMatch.box;
-        const globalX = box.xmin + offset.x;
-        const globalY = box.ymin + offset.y;
-        const w = box.xmax - box.xmin;
-        const h = box.ymax - box.ymin;
+        const globalX = box.xmin / scale + offset.x;
+        const globalY = box.ymin / scale + offset.y;
+        const w = (box.xmax - box.xmin) / scale;
+        const h = (box.ymax - box.ymin) / scale;
         
         const centerX = Math.round(globalX + w / 2);
         const centerY = Math.round(globalY + h / 2);

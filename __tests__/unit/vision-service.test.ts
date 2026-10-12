@@ -178,12 +178,17 @@ describe('Vision Service - findIcon', () => {
         const { setSpatialFocus } = await import('../../src/services/spatial-context');
         const { findIcon } = await import('../../src/services/vision-service');
         setSpatialFocus({ x: 5, y: 10, w: 100, h: 200 });
+        // Region capture at 1:1 pixel density: image width equals region width
+        mocks.toBuffer.mockResolvedValue({
+            data: Buffer.from([0, 0, 0, 0]),
+            info: { width: 100, height: 200, channels: 4 }
+        });
 
         const result = await findIcon('menu icon');
 
         expect(mocks.safeExecSync).toHaveBeenCalledWith('screencapture', [
             '-x',
-            '-R 5,10,100,200',
+            '-R5,10,100,200',
             expect.stringContaining('icon_search_')
         ]);
         expect(result.found).toBe(true);
