@@ -7,10 +7,12 @@ import * as securityUtils from '../../src/core/security-utils';
 const mockToBuffer = vi.fn().mockResolvedValue(Buffer.from('processed-image'));
 const mockPng = vi.fn().mockReturnThis();
 const mockComposite = vi.fn().mockReturnThis();
+const mockMetadata = vi.fn().mockResolvedValue({ width: 3024, height: 1964 });
 const mockSharpInstance = {
   composite: mockComposite,
   png: mockPng,
-  toBuffer: mockToBuffer
+  toBuffer: mockToBuffer,
+  metadata: mockMetadata
 };
 
 // We need to mock the default export of sharp

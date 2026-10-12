@@ -18,6 +18,12 @@ vi.mock('../../src/core/security-utils', () => ({
   sanitizeShellArg: vi.fn(x => x)
 }));
 
+vi.mock('sharp', () => ({
+  default: vi.fn(() => ({
+    metadata: vi.fn().mockResolvedValue({ width: 200, height: 200 })
+  }))
+}));
+
 vi.mock('../../src/core/ocr-cache', () => {
     const mGet = vi.fn();
     const mSet = vi.fn();
